@@ -14,7 +14,7 @@
       "type": "smoothness_spike",
       "severity": "moderate",
       "mu_value": 0.0148,
-      "description": "μ spike inconsistent with FFT continuity in thermal band"
+      "description": "\u03bc spike inconsistent with FFT continuity in thermal band"
     },
     {
       "planet_id": "planet_102",
@@ -22,14 +22,14 @@
       "type": "sigma_underestimate",
       "severity": "critical",
       "sigma_value": 0.0003,
-      "description": "σ below physical noise floor in white-light band"
+      "description": "\u03c3 below physical noise floor in white-light band"
     },
     {
       "planet_id": "planet_045",
       "bin": 211,
       "type": "photonic_mismatch",
       "severity": "low",
-      "description": "μ dip does not match known molecular absorption pattern (H₂O)"
+      "description": "\u03bc dip does not match known molecular absorption pattern (H\u2082O)"
     }
   ],
   "constraints_tested": [
