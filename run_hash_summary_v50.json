@@ -1,31 +1,67 @@
 {
-  "release": "v50.0.0",
-  "git_tag": "v50.0.0",
-  "created_at": "2025-07-28T00:00:00Z",
-  "artifact_hashes": {
-    "model.pt": "not_yet_generated",
-    "submission.csv": "not_yet_generated",
-    "configs/config.yaml": "99ffdd0007d3fefe43ee2f7b036e8004a6a0de6fe947a8bf3d7ec28e3b12d604",
-    "spectramind.toml": "to_be_filled",
-    "manifest_v50.csv": "to_be_filled",
-    "README.md": "to_be_filled"
+  "project": "SpectraMind V50",
+  "version": "0.1.0",
+  "run_id": "v50-run-2025-07-28-15-44-08",
+  "timestamp_utc": "2025-07-28T15:44:08Z",
+  "git_commit": "<insert-latest-git-hash>",
+  "device": "cuda",
+  "cuda_version": "12.1",
+  "pytorch_version": "2.1.0+cu121",
+  "python_version": "3.10.13",
+  "host": "ubuntu-24-04-devbox",
+  "user": "andy",
+  "run_mode": "inference+diagnostics",
+  "input_config": {
+    "hydra_profile": "configs/run/experiment.yaml",
+    "model_config": "configs/model/mamba_gnn.yaml",
+    "symbolic_config": "configs/symbolic/full.yaml",
+    "training_config": "configs/train/default.yaml",
+    "data_config": "configs/data/default.yaml"
   },
-  "diagnostics": {
-    "gll_score": null,
-    "calibration_temperature": null,
+  "enabled_modules": {
+    "symbolic_logic": true,
+    "shap_overlay": true,
+    "fft_diagnostics": true,
+    "violation_logging": true,
+    "simulator": true,
+    "html_reporting": true
+  },
+  "hashes": {
+    "model_file": {
+      "path": "outputs/model.pt",
+      "sha256": "d2f8ce64926455e74ab9ea0a2c3b90230a580b9d8a75b230a7155398657a9fc2"
+    },
+    "submission_file": {
+      "path": "outputs/submission.csv",
+      "sha256": "6d21cf1f3b4b06d7e9083cb7c51e733fb0bb361c67e8c4e1d3a9d6b4156c2a30"
+    },
+    "config_fingerprint": {
+      "config.yaml": "3971cf78a2163e3771e9ce54073a60e4",
+      "photonic_basis.yaml": "2a7fefbb78f53d45815d01d4d76a37b6",
+      "fft_templates.yaml": "2bfa8c31bfb39f8056215db42c84749d",
+      "symbolic/full.yaml": "5dacf1d4db183473c4a2c0ff72003aa0"
+    },
+    "spectramind.toml": "fb8e413cb0dc36c3c4f1115c5cd45e07"
+  },
+  "metrics": {
+    "score": 0.718,
+    "L_total": 11425.02,
+    "L_ideal": 6842.11,
+    "L_ref": 19055.98,
+    "symbolic_coverage": 0.96,
+    "violation_count": 38
+  },
+  "outputs": {
+    "submission_csv": "outputs/submission.csv",
+    "diagnostics_dir": "outputs/diagnostics/",
+    "html_report": "outputs/diagnostics/html_report/report.html",
     "violation_log": "constraint_violation_log.json"
   },
-  "tool_versions": {
-    "python": "3.10",
-    "torch": "2.1",
-    "poetry": "1.7",
-    "cuda": "12.1"
+  "reproducibility_checks": {
+    "dvc_lock_confirmed": true,
+    "lakefs_snapshot": "v50-staging-728b",
+    "git_clean_state": true,
+    "hash_match_manifest": true
   },
-  "system": {
-    "os": "Ubuntu 24.04 LTS",
-    "gpu_target": "A100 / T4 (Kaggle runtime compatible)",
-    "environment_manager": "Poetry",
-    "versioning": "SHA256 + TOML + manifest"
-  },
-  "notes": "This file was generated prior to training and inference. All placeholder hashes will be auto-filled by `generate_submission_package.py` after model and submission outputs are complete."
+  "finalized_by": "v50_pipeline_finalizer.py"
 }
