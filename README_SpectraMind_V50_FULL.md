@@ -1,28 +1,34 @@
 # 🪐 SpectraMind V50 – NeurIPS 2025 Ariel Data Challenge
 
-Welcome to **SpectraMind V50**, a fully modular, CLI-driven scientific AI pipeline developed for the ESA + NeurIPS 2025 Ariel Data Challenge.
+Welcome to **SpectraMind V50**, the complete scientific AI pipeline for the ESA + NeurIPS 2025 Ariel Data Challenge.  
+Built with modular architecture, symbolic intelligence, diagnostic tooling, and full reproducibility — this repository delivers state-of-the-art exoplanet atmosphere recovery using multi-instrument detector data.
 
-> **Mission:** Recover the transmission spectra (μ) and predictive uncertainty (σ) of exoplanet atmospheres using time-series detector data from Ariel’s AIRS-CH0 and FGS1 instruments.
+---
 
-This repository represents a top-down, engineering-grade architecture for scientific machine learning, symbolic reasoning, and astrophysical inference — designed for reproducibility, traceability, and scientific integrity.
+## 🎯 Mission
+
+> Predict exoplanet transmission spectra (μ) and associated uncertainty (σ) from detector-level time series acquired by Ariel’s AIRS-CH0 and FGS1 instruments.
+
+Models are evaluated using the **Gaussian Log-Likelihood (GLL)** metric over 283 spectral bins and compared against baseline and ideal models.
 
 ---
 
 ## 🚀 Pipeline Capabilities
 
-| Component         | Description |
-|------------------|-------------|
-| 🔁 Dual Encoder   | FGS1: Mamba SSM • AIRS: Spectral GNN with edge construction |
-| 🔬 Multi-scale Decoder | Low / mid / high band μ prediction |
-| 📉 Uncertainty Modeling | Softplus-constrained Flow-based σ estimator |
-| 🧠 Symbolic Modules | Spectral basis checks, photonic alignment, FFT smoothness |
-| ⚙️ CLI Orchestration | Full pipeline via Typer + Hydra + Poetry |
-| 🧪 Calibration + QA | GLL scoring, σ temperature scaling, violation overlays |
-| 📦 Reproducibility | Manifest + TOML + SHA256 + Submission ZIP builder |
+| Feature                | Description |
+|------------------------|-------------|
+| 🔁 Dual Encoder         | Mamba SSM (FGS1) + Spectral GNN (AIRS) |
+| 🔬 Multi-scale Decoder  | μ split into low, mid, high bands |
+| 📉 Uncertainty Modeling | Flow-based σ head with Softplus activation |
+| 🧠 Symbolic Constraints | Smoothness, non-negativity, molecular match |
+| 🔍 Diagnostics          | FFT overlays, rule violations, QA dashboards |
+| ⚙️ CLI Control          | Fully orchestrated via Typer + Hydra |
+| 🔐 Reproducibility      | Manifest, TOML, config, SHA256 |
+| 🛰 Challenge Compliance | Submission format, runtime, hash trail |
 
 ---
 
-## 🧱 Project Architecture
+## 🗂 Project Structure
 
 ```
 spectramind-v50/
@@ -58,10 +64,15 @@ spectramind-v50/
 │   │   └── dataloader.py
 │   ├── symbolic/
 │   │   ├── symbolic_loss.py
-│   │   └── photonic_alignment.py
+│   │   ├── photonic_alignment.py
+│   │   └── symbolic_logic_engine.py
 │   ├── diagnostics/
 │   │   ├── fft_variance_heatmap.py
-│   │   └── violation_heatmap.py
+│   │   ├── violation_heatmap.py
+│   │   ├── coherence_curve_plot.py
+│   │   └── generate_diagnostic_summary.py
+│   ├── explain/
+│   │   └── shap_overlay.py
 │   ├── training/
 │   │   └── train_v50.py
 │   ├── inference/
@@ -75,8 +86,9 @@ spectramind-v50/
 │   ├── v50_pipeline_finalizer.py
 │   └── auto_ablate_v50.py
 ├── outputs/
-│   ├── v50_debug_log.md
-│   └── submission.csv
+│   ├── submission.csv
+│   ├── model.pt
+│   └── v50_debug_log.md
 └── data/
     ├── train/
     │   ├── fgs1_tensor.npy
@@ -90,51 +102,103 @@ spectramind-v50/
 
 ---
 
-## 🛠️ Installation
+## 🛠 Installation
 
 ```bash
+# Poetry installation
 curl -sSL https://install.python-poetry.org | python3 -
+
+# Install dependencies
 poetry install
 ```
+
+> Python 3.10+, CUDA 12.1+, PyTorch ≥ 2.1 required
 
 ---
 
 ## 🧪 Usage
 
-### Train
+### 🧠 Train
 ```bash
 poetry run python src/spectramind/training/train_v50.py
 ```
 
-### Predict
+### 🔮 Predict
 ```bash
 poetry run python src/spectramind/inference/predict_v50.py
 ```
 
-### Submit
+### 📑 Generate Submission
 ```bash
 poetry run python scripts/submission.py
 ```
 
-### Package
+### ✅ Validate GLL
+```bash
+poetry run python src/spectramind/evaluation/validate.py
+```
+
+### 🔧 Calibrate σ
+```bash
+poetry run python src/spectramind/utils/calibrate.py
+```
+
+### 📦 Package for Submission
 ```bash
 poetry run python scripts/generate_submission_package.py
 ```
 
-### Validate + Calibrate
+### 🔁 CLI Health Check
 ```bash
-poetry run python src/spectramind/evaluation/validate.py
-poetry run python src/spectramind/utils/calibrate.py
+poetry run python src/spectramind/cli/selftest.py
 ```
 
 ---
 
-## 🔬 Scientific & Symbolic Tools
+## 📑 Submission Format
 
-- `symbolic_loss.py`
-- `photonic_alignment.py`
-- `fft_variance_heatmap.py`
-- `violation_heatmap.py`
+- 1 column: `planet_id`
+- 283 columns: `mu_1` → `mu_283`
+- 283 columns: `sigma_1` → `sigma_283`
+- ✅ Total: 567 columns
+- ✅ CSV output: `outputs/submission.csv`
+
+---
+
+## 🧬 Symbolic + Diagnostic Modules
+
+- `symbolic_loss.py`: symbolic rule loss routing
+- `photonic_alignment.py`: checks μ dips vs CH₄, H₂O, CO₂ templates
+- `symbolic_logic_engine.py`: programmable rule logic execution
+- `violation_heatmap.py`: visual overlay of broken constraints
+- `fft_variance_heatmap.py`: FFT variance scoring per bin
+- `coherence_curve_plot.py`: smoothness proxy of μ
+- `generate_diagnostic_summary.py`: auto QA summary
+- `shap_overlay.py`: SHAP × attention × symbolic fusion
+- `v50_debug_log.md`: captures QA + runtime diagnostics
+
+---
+
+## 🔐 Reproducibility Infrastructure
+
+| File | Purpose |
+|------|---------|
+| `spectramind.toml`         | Tracks version, modules, config paths |
+| `manifest_v50.csv`         | SHA256 hash list of all tracked files |
+| `run_hash_summary_v50.json`| Artifact tracking & hash recording |
+| `constraint_violation_log.json` | Symbolic & physics violation logs |
+| `outputs/v50_debug_log.md` | CLI + inference notes |
+| `poetry.lock`              | Frozen Python environment |
+
+---
+
+## 🛰 NeurIPS 2025 Compliance
+
+- ✅ 567-column `submission.csv` format
+- ✅ GLL scoring with symbolic constraints
+- ✅ GPU runtime < 9h (Kaggle A100-compatible)
+- ✅ Manifest, TOML, diagnostic, config trace
+- ✅ Self-validating submission tool
 
 ---
 
@@ -144,9 +208,15 @@ MIT License © 2025 Andy Barta
 
 ---
 
-## 🧠 Contributions Welcome
+## 🙌 Contributions
 
-Forks, extensions, symbolic logic proposals, GNN improvements, or scientific validation are all encouraged.
+SpectraMind is designed for extensibility in astrophysics, symbolic AI, diagnostics, and model transparency.
+
+We welcome:
+- PRs with new symbolic modules
+- Scientific constraint designs
+- CLI tools and runtime testing
+- Contributions to diagnostics or reproducibility tooling
 
 ---
 
