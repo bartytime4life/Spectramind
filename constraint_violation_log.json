@@ -1,0 +1,42 @@
+{
+  "pipeline_version": "v50.0.0",
+  "validated_at": "2025-07-28T00:00:00Z",
+  "violation_summary": {
+    "total_planets_tested": 143,
+    "total_bins": 40519,
+    "violations_detected": 217,
+    "violation_rate": 0.0054
+  },
+  "violations": [
+    {
+      "planet_id": "planet_078",
+      "bin": 111,
+      "type": "smoothness_spike",
+      "severity": "moderate",
+      "mu_value": 0.0148,
+      "description": "μ spike inconsistent with FFT continuity in thermal band"
+    },
+    {
+      "planet_id": "planet_102",
+      "bin": 0,
+      "type": "sigma_underestimate",
+      "severity": "critical",
+      "sigma_value": 0.0003,
+      "description": "σ below physical noise floor in white-light band"
+    },
+    {
+      "planet_id": "planet_045",
+      "bin": 211,
+      "type": "photonic_mismatch",
+      "severity": "low",
+      "description": "μ dip does not match known molecular absorption pattern (H₂O)"
+    }
+  ],
+  "constraints_tested": [
+    "non_negativity",
+    "smoothness_fft",
+    "photonic_basis_match",
+    "sigma_calibration_floor"
+  ],
+  "notes": "Use this log to route penalty weighting during ablation or retraining. Full symbolic violation overlay is available via diagnostics."
+}
