@@ -2,9 +2,9 @@
   "pipeline_version": "v50.0.0",
   "validated_at": "2025-07-28T00:00:00Z",
   "violation_summary": {
-    "total_planets_tested": 143,
-    "total_bins": 40519,
-    "violations_detected": 217,
+    "total_planets_tested": 148,
+    "total_bins": 41764,
+    "violations_detected": 226,
     "violation_rate": 0.0054
   },
   "violations": [
@@ -38,5 +38,5 @@
     "photonic_basis_match",
     "sigma_calibration_floor"
   ],
-  "notes": "Use this log to route penalty weighting during ablation or retraining. Full symbolic violation overlay is available via diagnostics."
+  "notes": "Use this log to route penalty weighting during training or ablation. Full overlays can be rendered via `violation_heatmap.py` or FFT diagnostics tools."
 }
