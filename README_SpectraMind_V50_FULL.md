@@ -1,37 +1,36 @@
 # 🪐 SpectraMind V50 – NeurIPS 2025 Ariel Data Challenge
 
-Welcome to the official repository for **SpectraMind V50**, an AI system designed to solve the ESA + NeurIPS 2025 Ariel Data Challenge. This version leverages hybrid symbolic + neural reasoning, dual-instrument fusion (FGS1 + AIRS), and rigorous uncertainty modeling.
+Welcome to **SpectraMind V50**, a fully modular, CLI-driven scientific AI pipeline developed for the ESA + NeurIPS 2025 Ariel Data Challenge.
+
+> **Mission:** Recover the transmission spectra (μ) and predictive uncertainty (σ) of exoplanet atmospheres using time-series detector data from Ariel’s AIRS-CH0 and FGS1 instruments.
+
+This repository represents a top-down, engineering-grade architecture for scientific machine learning, symbolic reasoning, and astrophysical inference — designed for reproducibility, traceability, and scientific integrity.
 
 ---
 
-## 🚀 Mission
-
-Predict the **exoplanet atmospheric transmission spectra** (μ) and corresponding uncertainties (σ) from time-series imagery captured by ESA's Ariel instruments (FGS1 and AIRS-CH0).  
-
-Submissions are evaluated using a **Gaussian Log-Likelihood (GLL)**-based score. Our pipeline is optimized for scientific fidelity, runtime constraints, and full reproducibility.
-
----
-
-## 🧠 Core Features
+## 🚀 Pipeline Capabilities
 
 | Component         | Description |
 |------------------|-------------|
-| 🔁 Dual Encoder   | `FGS1` via Mamba SSM and `AIRS` via Graph Attention GNN |
-| 🔬 Decoder        | Multi-scale μ head with 3 spectral bands |
-| 📉 Uncertainty    | Flow-based σ estimation with Softplus constraint |
-| ⚙️ CLI            | Unified `typer` CLI with Hydra config overrides |
-| 📦 Packaging      | Manifest + hash-based ZIP builder for submission |
-| 🔍 Diagnostics    | GLL validation, temperature calibration |
-| 🧪 Reproducibility| Poetry + DVC + config hashing + version pinning |
+| 🔁 Dual Encoder   | FGS1: Mamba SSM • AIRS: Spectral GNN with edge construction |
+| 🔬 Multi-scale Decoder | Low / mid / high band μ prediction |
+| 📉 Uncertainty Modeling | Softplus-constrained Flow-based σ estimator |
+| 🧠 Symbolic Modules | Spectral basis checks, photonic alignment, FFT smoothness |
+| ⚙️ CLI Orchestration | Full pipeline via Typer + Hydra + Poetry |
+| 🧪 Calibration + QA | GLL scoring, σ temperature scaling, violation overlays |
+| 📦 Reproducibility | Manifest + TOML + SHA256 + Submission ZIP builder |
 
 ---
 
-## 📁 Project Structure
+## 🧱 Project Architecture
 
 ```
 spectramind-v50/
 ├── README.md
+├── LICENSE
+├── .gitignore
 ├── pyproject.toml
+├── poetry.lock
 ├── spectramind.toml
 ├── manifest_v50.csv
 ├── run_hash_summary_v50.json
@@ -43,140 +42,112 @@ spectramind-v50/
 │   ├── fft_templates.yaml
 ├── src/spectramind/
 │   ├── cli/
+│   │   ├── cli_v50.py
+│   │   ├── commands.py
+│   │   └── selftest.py
 │   ├── core/
-│   ├── diagnostics/
+│   │   ├── model_v50_ar.py
+│   │   ├── multi_scale_decoder.py
+│   │   └── flow_uncertainty_head.py
 │   ├── models/
+│   │   ├── fgs1_mamba.py
+│   │   └── airs_gnn.py
 │   ├── utils/
+│   │   ├── gll_loss.py
+│   │   ├── calibrate.py
+│   │   └── dataloader.py
+│   ├── symbolic/
+│   │   ├── symbolic_loss.py
+│   │   └── photonic_alignment.py
+│   ├── diagnostics/
+│   │   ├── fft_variance_heatmap.py
+│   │   └── violation_heatmap.py
 │   ├── training/
+│   │   └── train_v50.py
+│   ├── inference/
+│   │   └── predict_v50.py
+│   ├── evaluation/
+│   │   └── validate.py
 ├── scripts/
-│   ├── train_v50.py
-│   ├── predict_v50.py
 │   ├── submission.py
+│   ├── submission_validator_v50.py
 │   ├── generate_submission_package.py
+│   ├── v50_pipeline_finalizer.py
+│   └── auto_ablate_v50.py
 ├── outputs/
-│   └── v50_debug_log.md
-└── data/  # managed via DVC/lakeFS
+│   ├── v50_debug_log.md
+│   └── submission.csv
+└── data/
+    ├── train/
+    │   ├── fgs1_tensor.npy
+    │   ├── airs_tensor.npy
+    │   ├── gt_mu.npy
+    │   └── gt_sigma.npy
+    └── test/
+        ├── fgs1_tensor.npy
+        └── airs_tensor.npy
 ```
 
 ---
 
-## 🛠️ Setup
+## 🛠️ Installation
 
 ```bash
-# Install dependencies
 curl -sSL https://install.python-poetry.org | python3 -
 poetry install
 ```
 
-> Requires: Python 3.10+, PyTorch 2.x, CUDA (optional for GPU)
-
 ---
 
-## 🔧 Training
+## 🧪 Usage
 
+### Train
 ```bash
-poetry run python scripts/train_v50.py
+poetry run python src/spectramind/training/train_v50.py
 ```
 
-This will train the model using configs from `configs/config.yaml` and save `model.pt` to `outputs/`.
-
----
-
-## 🧠 Inference
-
+### Predict
 ```bash
-poetry run python scripts/predict_v50.py
+poetry run python src/spectramind/inference/predict_v50.py
 ```
 
-Generates predicted `μ` and `σ` arrays for test planets.
-
----
-
-## 📝 Submission File
-
+### Submit
 ```bash
 poetry run python scripts/submission.py
 ```
 
-Builds a CSV file with:
-- 1 column: `planet_id`
-- 283 columns: `mu_1` through `mu_283`
-- 283 columns: `sigma_1` through `sigma_283`
-
----
-
-## 📦 Packaging
-
+### Package
 ```bash
 poetry run python scripts/generate_submission_package.py
 ```
 
-This script:
-- Bundles `model.pt`, `submission.csv`, `config.yaml`
-- Computes their SHA256 hashes
-- Writes `run_hash_summary_v50.json`
-- Creates a final `submission_bundle.zip`
-
----
-
-## 🧪 Validation + Calibration
-
+### Validate + Calibrate
 ```bash
-# Validate GLL score on a held-out validation set
-poetry run python scripts/validate.py
-
-# Calibrate σ using temperature scaling
-poetry run python scripts/calibrate.py
+poetry run python src/spectramind/evaluation/validate.py
+poetry run python src/spectramind/utils/calibrate.py
 ```
 
 ---
 
-## 🧬 Scientific Enhancements (Optional Modules)
+## 🔬 Scientific & Symbolic Tools
 
-- Spectral basis logic: `photonic_basis.yaml`
-- Smoothness constraints via FFT
-- Symbolic QA overlay tools
-- Violation heatmaps, entropy maps, FFT overlays
-
----
-
-## 🛰 Background
-
-- Ariel is an ESA mission to study the atmospheres of 1,000+ exoplanets via transmission spectroscopy
-- The NeurIPS 2025 challenge simulates this scenario using high-dimensional time-series detector data
-- μ = mean transit depth; σ = predictive uncertainty
-- GLL = log-likelihood metric comparing μ, σ to hidden ground truth
-
----
-
-## 🔐 Reproducibility
-
-- `spectramind.toml`: declares pipeline components + dependencies
-- `manifest_v50.csv`: lists hashes of all critical files
-- `run_hash_summary_v50.json`: snapshot of model+config+output for publication or competition
-- `poetry.lock`: deterministic Python env
+- `symbolic_loss.py`
+- `photonic_alignment.py`
+- `fft_variance_heatmap.py`
+- `violation_heatmap.py`
 
 ---
 
 ## 📜 License
 
-[MIT License](./LICENSE)
+MIT License © 2025 Andy Barta
 
 ---
 
-## 🏁 Challenge Compliance
+## 🧠 Contributions Welcome
 
-- ✅ Runs in <9h on Kaggle GPU
-- ✅ Output: 567-column `submission.csv`
-- ✅ Fully hashed & versioned
-- ✅ Scientific, modular, inspectable
+Forks, extensions, symbolic logic proposals, GNN improvements, or scientific validation are all encouraged.
 
 ---
 
-## ✨ Authors & Acknowledgements
-
-Developed by **Andy Barta** and team, building upon the foundations of the ESA Ariel Mission and NeurIPS Exoplanet Research Community.
-
----
-
-For questions, collaboration, or to build on V50+, contact us or fork this repo. We welcome scientific extension, symbolic reasoning, and anomaly detection collaboration.
+Let the science begin.
