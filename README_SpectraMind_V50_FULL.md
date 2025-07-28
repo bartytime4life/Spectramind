@@ -1,7 +1,3 @@
-Absolutely. Below is the most detailed, scientifically enriched, and fully exhaustive README for SpectraMind V50, reflecting every file, logical submodule, scientific foundation, and command pathway of the system.
-
-⸻
-
 🪐 SpectraMind V50 – Scientific AI for the NeurIPS 2025 Ariel Data Challenge
 
 SpectraMind V50 is a modular, reproducible, research-grade AI pipeline for exoplanetary atmosphere characterization, engineered for the ESA + NeurIPS 2025 Ariel Data Challenge.
