@@ -6,9 +6,10 @@ created_at = "2025-07-28T00:00:00Z"
 
 [system]
 framework = "PyTorch"
-python_version = "3.10"
 cuda_version = "12.1"
-gpu_target = "Kaggle T4 or A100 (<=9h)"
+python_version = "3.10"
+platform = "Ubuntu 24.04 LTS"
+entrypoint = "cli_v50.py"
 
 [dependencies]
 torch = ">=2.1"
@@ -30,16 +31,23 @@ decoder = ["MultiScaleDecoder"]
 uncertainty = ["FlowUncertaintyHead"]
 
 [modules.training]
-loss_function = "gaussian_log_likelihood"
 trainer = "train_v50.py"
-config = "configs/config.yaml"
+loss = "gaussian_log_likelihood"
 optimizer = "Adam"
+batch_size = 16
+epochs = 20
+device = "cuda"
 
 [modules.inference]
-script = "predict_v50.py"
+inference = "predict_v50.py"
 submission = "submission.py"
-validation = "validate.py"
-calibration = "calibrate.py"
+validator = "validate.py"
+calibrator = "calibrate.py"
+
+[modules.cli]
+entry = "cli_v50.py"
+commands = ["train_cmd", "predict_cmd", "validate_cmd", "calibrate_cmd"]
+selftest = "selftest.py"
 
 [modules.packaging]
 bundle = "generate_submission_package.py"
@@ -47,14 +55,17 @@ manifest = "manifest_v50.csv"
 hash_summary = "run_hash_summary_v50.json"
 constraint_log = "constraint_violation_log.json"
 
+[constraints]
+photonic_templates = "photonic_basis.yaml"
+science_rules = "science_constraints_v50.yaml"
+fft_templates = "fft_templates.yaml"
+
 [files]
 config = "configs/config.yaml"
-constraints = ["science_constraints_v50.yaml", "photonic_basis.yaml", "fft_templates.yaml"]
 readme = "README.md"
 license = "MIT"
-entrypoint = "cli_v50.py"
 
 [submission]
-columns = 567
 format = "planet_id, mu_1..283, sigma_1..283"
-output = "submission.csv"
+columns = 567
+path = "outputs/submission.csv"
