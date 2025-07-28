@@ -1,42 +1,69 @@
 {
-  "pipeline_version": "v50.0.0",
-  "validated_at": "2025-07-28T00:00:00Z",
-  "violation_summary": {
-    "total_planets_tested": 148,
-    "total_bins": 41764,
-    "violations_detected": 226,
-    "violation_rate": 0.0054
+  "metadata": {
+    "project": "SpectraMind V50",
+    "version": "0.1.0",
+    "timestamp": "2025-07-28T15:00:00Z",
+    "git_commit": "<insert-git-hash-here>",
+    "validator": "symbolic_logic_engine.py",
+    "config_profile": "configs/symbolic/full.yaml"
   },
   "violations": [
     {
-      "planet_id": "planet_078",
-      "bin": 111,
-      "type": "smoothness_spike",
-      "severity": "moderate",
-      "mu_value": 0.0148,
-      "description": "\u03bc spike inconsistent with FFT continuity in thermal band"
+      "planet_id": "Planet_007",
+      "bin_index": 142,
+      "wavelength_um": 2.87,
+      "rule": "photonic_alignment:CH4_band_2",
+      "violation_type": "mismatch (μ too high in absorption dip)",
+      "expected_behavior": "μ should dip below CH4 absorption threshold",
+      "observed_mu": 121.4,
+      "symbolic_score": 0.66,
+      "severity": "high",
+      "shap_peak": 0.53,
+      "timestamp": "2025-07-28T14:58:31Z"
     },
     {
-      "planet_id": "planet_102",
-      "bin": 0,
-      "type": "sigma_underestimate",
+      "planet_id": "Planet_021",
+      "bin_index": 33,
+      "wavelength_um": 0.73,
+      "rule": "smoothness_constraint",
+      "violation_type": "sharp discontinuity (μ[i+1] - μ[i] > threshold)",
+      "expected_behavior": "Δμ between bins should be <= 10 ppm",
+      "observed_mu": [114.3, 142.1],
+      "symbolic_score": 0.42,
+      "severity": "medium",
+      "shap_peak": 0.27,
+      "timestamp": "2025-07-28T14:58:33Z"
+    },
+    {
+      "planet_id": "Planet_021",
+      "bin_index": 265,
+      "wavelength_um": 3.74,
+      "rule": "nonnegativity",
+      "violation_type": "μ < 0",
+      "expected_behavior": "μ must remain ≥ 0",
+      "observed_mu": -7.81,
+      "symbolic_score": 0.22,
       "severity": "critical",
-      "sigma_value": 0.0003,
-      "description": "\u03c3 below physical noise floor in white-light band"
-    },
-    {
-      "planet_id": "planet_045",
-      "bin": 211,
-      "type": "photonic_mismatch",
-      "severity": "low",
-      "description": "\u03bc dip does not match known molecular absorption pattern (H\u2082O)"
+      "shap_peak": 0.11,
+      "timestamp": "2025-07-28T14:58:34Z"
     }
   ],
-  "constraints_tested": [
-    "non_negativity",
-    "smoothness_fft",
-    "photonic_basis_match",
-    "sigma_calibration_floor"
-  ],
-  "notes": "Use this log to route penalty weighting during training or ablation. Full overlays can be rendered via `violation_heatmap.py` or FFT diagnostics tools."
+  "summary": {
+    "total_planets": 2,
+    "total_violations": 3,
+    "rules_triggered": [
+      "photonic_alignment:CH4_band_2",
+      "smoothness_constraint",
+      "nonnegativity"
+    ],
+    "most_common_rule": "smoothness_constraint",
+    "high_severity_count": 2,
+    "critical_count": 1,
+    "symbolic_score_distribution": {
+      "0.0–0.25": 1,
+      "0.25–0.5": 1,
+      "0.5–0.75": 1,
+      "0.75–1.0": 0
+    }
+  }
 }
