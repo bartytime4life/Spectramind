@@ -1,0 +1,60 @@
+[version]
+name = "SpectraMind V50"
+release = "v50.0.0"
+status = "stable"
+created_at = "2025-07-28T00:00:00Z"
+
+[system]
+framework = "PyTorch"
+python_version = "3.10"
+cuda_version = "12.1"
+gpu_target = "Kaggle T4 or A100 (<=9h)"
+
+[dependencies]
+torch = ">=2.1"
+torch-geometric = ">=2.4"
+hydra-core = ">=1.3"
+typer = ">=0.9"
+mlflow = ">=2.4"
+optuna = ">=3.5"
+transformers = ">=4.39"
+datasets = ">=2.18"
+accelerate = "*"
+dvc = "*"
+lakefs = "*"
+mamba-ssm = "git"
+
+[modules.core]
+encoder = ["FGS1MambaEncoder", "AIRSGNNEncoder"]
+decoder = ["MultiScaleDecoder"]
+uncertainty = ["FlowUncertaintyHead"]
+
+[modules.training]
+loss_function = "gaussian_log_likelihood"
+trainer = "train_v50.py"
+config = "configs/config.yaml"
+optimizer = "Adam"
+
+[modules.inference]
+script = "predict_v50.py"
+submission = "submission.py"
+validation = "validate.py"
+calibration = "calibrate.py"
+
+[modules.packaging]
+bundle = "generate_submission_package.py"
+manifest = "manifest_v50.csv"
+hash_summary = "run_hash_summary_v50.json"
+constraint_log = "constraint_violation_log.json"
+
+[files]
+config = "configs/config.yaml"
+constraints = ["science_constraints_v50.yaml", "photonic_basis.yaml", "fft_templates.yaml"]
+readme = "README.md"
+license = "MIT"
+entrypoint = "cli_v50.py"
+
+[submission]
+columns = 567
+format = "planet_id, mu_1..283, sigma_1..283"
+output = "submission.csv"
