@@ -55,19 +55,33 @@ spectramind-v50/
 ├── README.md
 ├── LICENSE
 ├── .gitignore
-├── pyproject.toml                # Poetry-managed Python project
+├── pyproject.toml
 ├── poetry.lock
-├── spectramind.toml             # Version info, metadata, reproducibility keys
-├── manifest_v50.csv             # Full file registry and SHA256 hashes
-├── run_hash_summary_v50.json    # Per-run hash and config log
-├── constraint_violation_log.json
-├── v50_debug_log.md             # Runtime anomaly notes
+├── spectramind.toml                 # Project metadata + reproducibility hash
+├── manifest_v50.csv                 # All files, hashes, categories
+├── run_hash_summary_v50.json        # Hash summary of current run
+├── constraint_violation_log.json    # JSON log of symbolic constraint violations
+├── v50_debug_log.md                 # Developer notes and known issues
 │
-├── configs/                     # YAML config directory (Hydra-compatible)
+├── configs/                         # Hydra YAML configs
 │   ├── config.yaml
+│   ├── run/
+│   │   └── experiment.yaml
+│   ├── model/
+│   │   └── mamba_gnn.yaml
+│   ├── train/
+│   │   └── default.yaml
+│   ├── predict/
+│   │   └── submission.yaml
+│   ├── data/
+│   │   └── default.yaml
+│   ├── symbolic/
+│   │   └── full.yaml
+│   ├── ui/
+│   │   └── dashboard.yaml
 │   ├── science_constraints_v50.yaml
 │   ├── photonic_basis.yaml
-│   ├── fft_templates.yaml
+│   └── fft_templates.yaml
 │
 ├── src/spectramind/
 │   ├── core/
@@ -78,30 +92,62 @@ spectramind-v50/
 │   ├── cli/
 │   │   ├── cli_v50.py
 │   │   ├── commands.py
-│   │   ├── selftest.py
+│   │   ├── cli_dashboard_mini.py
+│   │   ├── cli_explain_util.py
+│   │   ├── execution_flow.py
+│   │   ├── error_humanizer.py
+│   │   └── selftest.py
 │
 │   ├── models/
 │   │   ├── fgs1_mamba.py
-│   │   └── airs_gnn.py
+│   │   ├── airs_gnn.py
+│   │   └── moe_decoder_head.py
 │
 │   ├── utils/
 │   │   ├── calibrate.py
 │   │   ├── gll_loss.py
-│   │   └── dataloader.py
+│   │   ├── dataloader.py
+│   │   ├── generate_html_report.py
+│   │   ├── generate_quantile_bands.py
+│   │   └── plot_quantiles_vs_target.py
 │
 │   ├── symbolic/
-│   │   ├── symbolic_loss.py
 │   │   ├── symbolic_logic_engine.py
+│   │   ├── symbolic_loss.py
 │   │   ├── photonic_alignment.py
+│   │   ├── symbolic_rule_scorer.py
+│   │   ├── symbolic_profile_switcher.py
+│   │   ├── symbolic_violation_predictor.py
+│   │   ├── auto_symbolic_rule_miner.py
+│   │   ├── neural_logic_graph.py
+│   │   └── symbolic_program_ensemble.py
 │
 │   ├── diagnostics/
 │   │   ├── fft_variance_heatmap.py
 │   │   ├── violation_heatmap.py
 │   │   ├── coherence_curve_plot.py
+│   │   ├── entropy_heatmap.py
+│   │   ├── latent_drift_overlay.py
+│   │   ├── anomaly_feedback_trainer.py
 │   │   └── generate_diagnostic_summary.py
 │
 │   ├── explain/
-│   │   └── shap_overlay.py
+│   │   ├── shap_overlay.py
+│   │   ├── shap_attention_overlay.py
+│   │   ├── latent_decomposer.py
+│   │   ├── symbolic_influence_map.py
+│   │   ├── latent_rule_attention_overlay.py
+│   │   └── posterior_explorer_dashboard.py
+│
+│   ├── simulators/
+│   │   ├── instrument_simulator.py
+│   │   ├── spectral_transfer_graph.py
+│   │   └── temporal_transit_simulator.py
+│
+│   ├── adaptation/
+│   │   ├── planet_memory_bank.py
+│   │   ├── hypercluster_adaptor.py
+│   │   └── planet_episode_summarizer.py
 │
 │   ├── training/
 │   │   └── train_v50.py
@@ -110,19 +156,27 @@ spectramind-v50/
 │   │   └── predict_v50.py
 │
 │   ├── evaluation/
-│   │   └── validate.py
+│   │   ├── validate.py
+│   │   ├── calibration_checker.py
+│   │   └── generate_uncertainty_report.py
 │
 ├── scripts/
 │   ├── submission.py
 │   ├── submission_validator_v50.py
 │   ├── generate_submission_package.py
+│   ├── submission_diff_viewer.py
 │   ├── auto_ablate_v50.py
 │   └── v50_pipeline_finalizer.py
 │
 ├── outputs/
-│   ├── model.pt
 │   ├── submission.csv
-│   └── logs/
+│   ├── logs/
+│   ├── model.pt
+│   ├── run_cfg.yaml
+│   └── diagnostics/
+│       ├── fft/
+│       ├── shap/
+│       └── html_report/
 │
 └── data/
     ├── train/
