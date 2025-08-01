@@ -6,6 +6,7 @@ AIRS branch: Simple GNN-style feedforward projection
 Decoder: MoE | Diffusion | Quantile
 Output: μ (mean spectrum), σ (uncertainty)
 Supports symbolic constraint losses + MetaLossScheduler
+Includes dropout + optional residual skip for decoder robustness
 """
 
 import torch
@@ -43,12 +44,14 @@ class AIRSGraphBranch(nn.Module):
         return self.gnn_layers(x).mean(dim=0)  # (128,)
 
 class SpectraMindModel(nn.Module):
-    def __init__(self, decoder_type="moe"):
+    def __init__(self, decoder_type="moe", use_residual=True, decoder_dropout=0.1):
         """Instantiate full model with selectable decoder"""
         super().__init__()
         self.fgs_branch = MambaBranch()
         self.airs_branch = AIRSGraphBranch()
         self.decoder_type = decoder_type
+        self.use_residual = use_residual
+        self.dropout = nn.Dropout(p=decoder_dropout)
 
         if decoder_type == "moe":
             self.head = MoEDecoderHead(input_dim=264 + 8, output_dim=283, num_experts=4, return_sigma=True)
@@ -69,6 +72,10 @@ class SpectraMindModel(nn.Module):
 
     def forward(self, fgs_seq, airs_seq, metadata):
         x = self.encode_latent(fgs_seq, airs_seq, metadata)
+        residual = x.detach() if self.use_residual else 0.0
+        x = self.dropout(x)
+        if self.use_residual:
+            x = x + residual
 
         if self.decoder_type == "moe":
             return self.head(x)
@@ -77,7 +84,7 @@ class SpectraMindModel(nn.Module):
             sigma = torch.full_like(mu, 0.05)
             return mu, sigma
         elif self.decoder_type == "quantile":
-            return self.head(x)  # returns mu, sigma
+            return self.head(x)
 
     def compute_total_loss(self, mu, sigma, y_true, config, epoch=0):
         """Compute GLL + symbolic weighted composite loss"""
