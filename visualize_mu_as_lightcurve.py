@@ -1,8 +1,8 @@
 """
 SpectraMind V50 – μ-to-Lightcurve Visualizer
 --------------------------------------------
-Generates a diagnostic lightcurve from a μ(λ) spectrum using star/planet metadata.
-Supports multi-planet files, transit kernel scaling, and CSV/PNG outputs.
+Generates transit lightcurve diagnostics from μ(λ) spectra using star/planet metadata.
+Supports single or batch mode with CSV and image output.
 """
 
 import numpy as np
@@ -14,65 +14,63 @@ from pathlib import Path
 
 app = typer.Typer(help="Convert μ(λ) spectra to toy transit lightcurves")
 
+def simulate_single_lightcurve(mu: np.ndarray, t: np.ndarray) -> np.ndarray:
+    norm_mu = (mu - mu.min()) / (mu.max() - mu.min() + 1e-8)
+    kernel = 1 - 0.002 * np.exp(-t**2 / 0.25)
+    return np.convolve(kernel, norm_mu[::-1], mode='same')
+
 @app.command()
 @torch.no_grad()
 def simulate_lightcurve(
     mu_csv: Path = typer.Option(..., help="CSV with μ predictions (e.g., submission.csv)"),
     meta_csv: Path = typer.Option(..., help="CSV with metadata (e.g., star_info.csv)"),
-    output: Path = typer.Option("outputs/simulated_lightcurve.png", help="Output image path"),
-    planet_index: int = typer.Option(0, help="Index of planet to plot (default: 0)"),
-    export_csv: bool = typer.Option(True, help="Also save lightcurve values as CSV")
+    output_dir: Path = typer.Option("outputs/lightcurves", help="Directory to save visualizations"),
+    planet_index: int = typer.Option(0, help="Planet index if not using --all"),
+    export_csv: bool = typer.Option(True, help="Save lightcurve values as CSV"),
+    all: bool = typer.Option(False, help="Simulate lightcurves for all planets"),
+    limit: int = typer.Option(0, help="If > 0, limit to first N planets")
 ):
     """
-    Visualizes a lightcurve shape synthesized from the μ transmission spectrum.
+    Converts μ spectra to lightcurves using toy convolution kernel. Supports --all mode.
     """
     sub = pd.read_csv(mu_csv)
     meta = pd.read_csv(meta_csv)
 
-    if planet_index >= len(sub):
-        print(f"❌ Planet index {planet_index} out of bounds.")
-        raise typer.Exit(1)
-
-    mu = sub.iloc[planet_index, 1:284].values
-    pid = sub.iloc[planet_index, 0]
-
-    mp = meta.iloc[planet_index].get('Mp', 1.0)
-    i = meta.iloc[planet_index].get('i', 90.0)
-    p = meta.iloc[planet_index].get('P', 1.0)
-    sma = meta.iloc[planet_index].get('sma', 1.0)
-
-    # Normalize μ
-    norm_mu = (mu - mu.min()) / (mu.max() - mu.min() + 1e-8)
-
-    # Time grid and toy Gaussian transit kernel
     t = np.linspace(-2, 2, 300)
-    transit_kernel = 1 - 0.002 * np.exp(-t**2 / 0.25)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    # μ to lightcurve via convolution
-    lightcurve = np.convolve(transit_kernel, norm_mu[::-1], mode='same')
-    baseline = np.ones_like(lightcurve)
+    planet_rows = list(range(len(sub))) if all else [planet_index]
+    if limit > 0:
+        planet_rows = planet_rows[:limit]
 
-    # Plot
-    plt.figure(figsize=(10, 4))
-    plt.plot(t, baseline, color="gray", linestyle="--", label="Baseline")
-    plt.plot(t, lightcurve, label=f"Simulated Light Curve – {pid}", color="black")
-    plt.title(f"μ → Simulated Transit Light Curve for {pid}")
-    plt.xlabel("Time (arb units)")
-    plt.ylabel("Flux")
-    plt.grid(True)
-    plt.legend()
-    plt.tight_layout()
+    for i in planet_rows:
+        row = sub.iloc[i]
+        pid = row["planet_id"]
+        mu = row[[f"mu_{j}" for j in range(283)]].values
 
-    output.parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(output)
-    print(f"✅ Saved lightcurve to {output}")
+        lightcurve = simulate_single_lightcurve(mu, t)
+        baseline = np.ones_like(lightcurve)
 
-    if export_csv:
-        csv_out = output.with_suffix(".csv")
-        pd.DataFrame({"t": t, "flux": lightcurve}).to_csv(csv_out, index=False)
-        print(f"📄 Saved lightcurve CSV to {csv_out}")
+        # Plot
+        plt.figure(figsize=(10, 4))
+        plt.plot(t, baseline, linestyle="--", color="gray", label="Baseline")
+        plt.plot(t, lightcurve, label=f"{pid}", color="black")
+        plt.title(f"μ → Simulated Transit Light Curve for {pid}")
+        plt.xlabel("Time (arb)")
+        plt.ylabel("Flux")
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+
+        png_path = output_dir / f"simulated_lightcurve_{pid}.png"
+        plt.savefig(png_path)
+        plt.close()
+        print(f"✅ Saved lightcurve plot to {png_path}")
+
+        if export_csv:
+            csv_path = output_dir / f"simulated_lightcurve_{pid}.csv"
+            pd.DataFrame({"t": t, "flux": lightcurve}).to_csv(csv_path, index=False)
+            print(f"📄 Saved lightcurve data to {csv_path}")
 
 if __name__ == "__main__":
     app()
-
-
