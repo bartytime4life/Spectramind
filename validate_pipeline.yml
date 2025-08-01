@@ -1,0 +1,71 @@
+name: SpectraMind V50 CI – Full Pipeline Validator
+
+on:
+  push:
+    paths:
+      - '**/*.py'
+      - 'configs/**'
+      - '.github/workflows/validate_pipeline.yml'
+  pull_request:
+
+jobs:
+  validate:
+    name: 🧪 SpectraMind V50 CI Suite
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ⬇️ Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: 🐍 Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: 🔧 Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry || echo "Poetry not available, falling back"
+          
+          if [ -f pyproject.toml ]; then
+            poetry install --with dev || echo "Poetry install failed"
+          elif [ -f requirements.txt ]; then
+            pip install -r requirements.txt || echo "requirements.txt missing or invalid"
+          fi
+
+          pip install typer rich dominate torch numpy pandas matplotlib shap
+
+      - name: ✅ Run CLI Self-Test
+        run: python selftest.py run-selftest
+
+      - name: 📚 Validate CLI Registry
+        run: python validate_cli_registry.py
+
+      - name: 🔍 Check Pipeline Consistency
+        run: python pipeline_consistency_checker.py
+
+      - name: 📦 Check Submission Format (if available)
+        run: |
+          if [ -f submission.csv ]; then
+            python submission_format_checker.py submission.csv
+          else
+            echo "submission.csv not found – skipping check"
+          fi
+
+      - name: 🧠 Run Symbolic Rule Scorer
+        run: python symbolic_rule_scorer.py
+
+      - name: 📊 Run SHAP Overlay Diagnostic
+        run: python shap_overlay.py
+
+      - name: 🧪 Load μ Tensor and Forward Simulate Lightcurve
+        run: |
+          python -c "import torch; torch.load('outputs/mu.pt')"
+          python simulate_lightcurve_from_mu.py --mu-csv submission.csv --meta-csv star_info.csv
+
+      - name: 📝 Generate Symbolic HTML Report
+        run: python generate_html_report.py
+
+      - name: 📄 Always Show Debug Log
+        if: always()
+        run: cat v50_debug_log.md || echo "No debug log found"
