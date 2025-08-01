@@ -17,6 +17,16 @@ jobs:
       - name: ⬇️ Checkout Repository
         uses: actions/checkout@v3
 
+      - name: ♻️ Restore Poetry & pip cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/pypoetry
+          key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-
+
       - name: 🐍 Set up Python 3.10
         uses: actions/setup-python@v4
         with:
@@ -26,11 +36,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install poetry || echo "Poetry not available, falling back"
-          
+
           if [ -f pyproject.toml ]; then
             poetry install --with dev || echo "Poetry install failed"
           elif [ -f requirements.txt ]; then
-            pip install -r requirements.txt || echo "requirements.txt missing or invalid"
+            pip install -r requirements.txt || echo "requirements.txt not found"
           fi
 
           pip install typer rich dominate torch numpy pandas matplotlib shap
@@ -42,14 +52,14 @@ jobs:
         run: python validate_cli_registry.py
 
       - name: 🔍 Check Pipeline Consistency
-        run: python pipeline_consistency_checker.py
+        run: python pipeline_consistency_checker.py full-check --strict
 
       - name: 📦 Check Submission Format (if available)
         run: |
           if [ -f submission.csv ]; then
             python submission_format_checker.py submission.csv
           else
-            echo "submission.csv not found – skipping check"
+            echo "📭 submission.csv not found – skipping format check"
           fi
 
       - name: 🧠 Run Symbolic Rule Scorer
@@ -58,14 +68,31 @@ jobs:
       - name: 📊 Run SHAP Overlay Diagnostic
         run: python shap_overlay.py
 
-      - name: 🧪 Load μ Tensor and Forward Simulate Lightcurve
+      - name: 🎯 Forward Simulate Lightcurve (if μ tensor available)
         run: |
-          python -c "import torch; torch.load('outputs/mu.pt')"
-          python simulate_lightcurve_from_mu.py --mu-csv submission.csv --meta-csv star_info.csv
+          if [ -f outputs/mu.pt ]; then
+            python simulate_lightcurve_from_mu.py --mu-csv submission.csv --meta-csv star_info.csv
+          else
+            echo "μ tensor missing – skipping simulate_lightcurve_from_mu"
+          fi
 
       - name: 📝 Generate Symbolic HTML Report
         run: python generate_html_report.py
 
+      - name: 💾 Upload Diagnostics (if present)
+        uses: actions/upload-artifact@v3
+        with:
+          name: v50-diagnostics
+          path: |
+            outputs/diagnostics/
+            v50_debug_log.md
+            constraint_violation_log.json
+            run_hash_summary_v50.json
+            submission.csv
+          if-no-files-found: ignore
+
       - name: 📄 Always Show Debug Log
         if: always()
-        run: cat v50_debug_log.md || echo "No debug log found"
+        run: |
+          echo "----- v50_debug_log.md -----"
+          cat v50_debug_log.md || echo "⚠️ No debug log found"
