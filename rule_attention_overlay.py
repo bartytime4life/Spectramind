@@ -1,71 +1,77 @@
 """
-SpectraMind V50 – Latent Rule Attention Overlay (SHAP × Symbolic Diagnostic)
--------------------------------------------------------------------------------
-Combines symbolic rule activation maps with decoder or MoE attention vectors.
-Generates overlay diagnostic plots and saves metrics/logs for visual inspection.
+SpectraMind V50 – Latent Rule Attention Overlay
+------------------------------------------------
+Overlays symbolic rule influence onto latent space projections (UMAP/PCA/TSNE).
+Visualizes how symbolic constraints affect latent representations.
+Supports summary stats, normalized coloring, and customizable projection.
 """
 
-import torch
-import matplotlib.pyplot as plt
-import os
 import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import typer
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
 from pathlib import Path
 import json
+import os
+from sklearn.preprocessing import StandardScaler
 
+app = typer.Typer(help="Visualize symbolic rule attention in latent space")
 
-class LatentRuleAttentionOverlay:
-    def __init__(self, rule_map: torch.Tensor, save_path="outputs/diagnostics/latent_rule_overlay.png"):
-        """
-        Args:
-            rule_map: (B, 283) symbolic activation tensor (float or binary)
-        """
-        self.rule_map = rule_map  # (B, 283)
-        self.save_path = Path(save_path)
+@app.command()
+def run_overlay(
+    latent_file: Path = typer.Option("outputs/latents.npy", help="Latent embedding array (N, D)"),
+    rule_mask_file: Path = typer.Option("outputs/rule_mask.json", help="Symbolic rule bin mask (planet_id → bin list)"),
+    id_file: Path = typer.Option("outputs/planet_ids.txt", help="File with ordered planet IDs (one per line)"),
+    projection: str = typer.Option("pca", help="Projection method: pca | tsne"),
+    normalize: bool = typer.Option(True, help="Normalize latent vectors before projection"),
+    out_file: Path = typer.Option("outputs/diagnostics/latent_rule_overlay.png", help="Path to save visualization"),
+    save_csv: bool = typer.Option(True, help="Save 2D projected coordinates with rule influence")
+):
+    """
+    Plots 2D projection of latent space, overlaying symbolic rule influence per point.
+    """
+    latents = np.load(latent_file)  # shape (N, D)
+    with open(rule_mask_file) as f:
+        rule_mask = json.load(f)
+    ids = [line.strip() for line in open(id_file)]
 
-    def overlay(self, attention_weights: torch.Tensor) -> torch.Tensor:
-        """
-        Args:
-            attention_weights: (B, 283) tensor from decoder or SHAP
-        Returns:
-            overlay: (B, 283) product of rule_map and attention_weights
-        """
-        return self.rule_map * attention_weights
+    if latents.shape[0] != len(ids):
+        raise ValueError("Latents and ID file must align in row count")
 
-    def plot(self, overlay: torch.Tensor, title="Latent × Rule Attention Overlay"):
-        os.makedirs(self.save_path.parent, exist_ok=True)
-        plt.figure(figsize=(10, 4))
-        mean_overlay = overlay.mean(dim=0).cpu().numpy()
-        plt.plot(mean_overlay)
-        plt.title(title)
-        plt.xlabel("Spectral Bin")
-        plt.ylabel("Weighted Rule Activation")
-        plt.grid(True)
-        plt.tight_layout()
-        plt.savefig(self.save_path)
-        plt.close()
+    # Create binary violation map
+    violators = np.array([1 if pid in rule_mask and len(rule_mask[pid]) > 0 else 0 for pid in ids])
 
-        summary = {
-            "mean": float(np.mean(mean_overlay)),
-            "std": float(np.std(mean_overlay)),
-            "max": float(np.max(mean_overlay)),
-            "min": float(np.min(mean_overlay))
-        }
-        with open(self.save_path.with_suffix(".json"), "w") as f:
-            json.dump(summary, f, indent=2)
+    if normalize:
+        latents = StandardScaler().fit_transform(latents)
 
-        print("✅ Overlay plot saved to", self.save_path)
-        print("📊 Stats:", summary)
+    if projection == "pca":
+        reducer = PCA(n_components=2)
+    elif projection == "tsne":
+        reducer = TSNE(n_components=2, perplexity=30)
+    else:
+        raise ValueError("Projection must be: pca | tsne")
 
+    coords = reducer.fit_transform(latents)
+
+    plt.figure(figsize=(8, 6))
+    plt.scatter(coords[:, 0], coords[:, 1], c=violators, cmap="coolwarm", alpha=0.7)
+    plt.title("Latent Space with Symbolic Rule Overlay")
+    plt.xlabel("Component 1")
+    plt.ylabel("Component 2")
+    plt.colorbar(label="Symbolic Violation")
+    os.makedirs(out_file.parent, exist_ok=True)
+    plt.tight_layout()
+    plt.savefig(out_file)
+    print(f"✅ Saved overlay visualization to {out_file}")
+
+    if save_csv:
+        df = pd.DataFrame(coords, columns=["x", "y"])
+        df["planet_id"] = ids
+        df["rule_violation"] = violators
+        df.to_csv(out_file.with_suffix(".csv"), index=False)
+        print(f"📄 Saved projection CSV to {out_file.with_suffix('.csv')}")
 
 if __name__ == "__main__":
-    rule_mask_path = Path("outputs/rule_mask.pt")
-    attention_path = Path("outputs/decoder_attention.pt")
-
-    if not rule_mask_path.exists() or not attention_path.exists():
-        print("❌ Missing rule_mask.pt or decoder_attention.pt in outputs/")
-    else:
-        rules = torch.load(rule_mask_path)  # shape: (B, 283)
-        attn = torch.load(attention_path)   # shape: (B, 283)
-        overlay = LatentRuleAttentionOverlay(rule_map=rules)
-        masked = overlay.overlay(attn)
-        overlay.plot(masked)
+    app()
