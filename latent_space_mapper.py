@@ -1,8 +1,8 @@
 """
-SpectraMind V50 – Latent Space Extractor & Visualizer
-------------------------------------------------------
-Generates 2D latent map using AIRS + FGS1 + metadata fusion.
-Supports color by metadata, export to CSV, flexible projection (t-SNE/UMAP), and diagnostics.
+SpectraMind V50 – Latent Space Extractor & Cluster Visualizer
+-------------------------------------------------------------
+Projects latent space using t-SNE or PCA and overlays KMeans cluster labels or metadata colors.
+Saves annotated CSV and visualization plot.
 """
 
 import os
@@ -13,6 +13,7 @@ import torch
 from torch.utils.data import DataLoader
 from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
+from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
 from pathlib import Path
 
@@ -42,7 +43,8 @@ def run_latent_mapping(
     out_dir="outputs/latents_v50",
     model_path="outputs/model.pt",
     projection="tsne",
-    color_by="Teff"
+    color_by="Teff",
+    clusters: int = 0
 ):
     os.makedirs(out_dir, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -56,28 +58,45 @@ def run_latent_mapping(
 
     print("📦 Extracting V50 latent vectors...")
     features, ids, temps = extract_latents(model, loader, device)
-    print(f"✅ Latent feature shape: {features.shape}")
+    print(f"✅ Latent shape: {features.shape}")
 
-    print(f"🔍 Running {projection.upper()} projection...")
     if projection == "tsne":
         reducer = TSNE(n_components=2, perplexity=30, random_state=42)
     elif projection == "pca":
         reducer = PCA(n_components=2)
     else:
-        raise ValueError("Unsupported projection: use 'tsne' or 'pca'")
+        raise ValueError("projection must be 'tsne' or 'pca'")
 
+    print(f"🔍 Running {projection.upper()} projection...")
     coords = reducer.fit_transform(features)
+
     df = pd.DataFrame(coords, columns=["x", "y"])
     df["planet_id"] = ids
     df["Teff"] = temps
+
+    if clusters > 0:
+        print(f"📊 Running KMeans clustering (k={clusters})...")
+        km = KMeans(n_clusters=clusters, random_state=42)
+        df["cluster_id"] = km.fit_predict(coords)
+    else:
+        df["cluster_id"] = -1
+
+    # Save CSV
     csv_path = os.path.join(out_dir, f"latent_map_{projection}.csv")
     df.to_csv(csv_path, index=False)
 
+    # Plot
     png_path = os.path.join(out_dir, f"latent_map_{projection}.png")
     plt.figure(figsize=(10, 6))
-    sc = plt.scatter(df["x"], df["y"], s=10, alpha=0.7, edgecolors='none', c=df[color_by], cmap="viridis")
-    plt.colorbar(sc, label=color_by)
-    plt.title(f"SpectraMind V50 – Latent Space ({projection.upper()})")
+
+    if clusters > 0:
+        scatter = plt.scatter(df["x"], df["y"], c=df["cluster_id"], cmap="tab10", s=10, alpha=0.8)
+        plt.colorbar(scatter, label="Cluster ID")
+    else:
+        scatter = plt.scatter(df["x"], df["y"], c=df[color_by], cmap="viridis", s=10, alpha=0.8)
+        plt.colorbar(scatter, label=color_by)
+
+    plt.title(f"SpectraMind V50 – Latent Map ({projection.upper()})")
     plt.xlabel("Component 1")
     plt.ylabel("Component 2")
     plt.grid(True, linestyle=":", alpha=0.3)
@@ -90,12 +109,13 @@ def run_latent_mapping(
 
 if __name__ == '__main__':
     import argparse
-    parser = argparse.ArgumentParser(description="SpectraMind V50: Latent space projection")
+    parser = argparse.ArgumentParser(description="SpectraMind V50 – Latent Space Projection")
     parser.add_argument("--config", default="configs/config_v50.json")
     parser.add_argument("--model", default="outputs/model.pt")
     parser.add_argument("--out_dir", default="outputs/latents_v50")
     parser.add_argument("--projection", default="tsne", choices=["tsne", "pca"])
     parser.add_argument("--color_by", default="Teff")
+    parser.add_argument("--clusters", type=int, default=0, help="Number of KMeans clusters (0 = disable)")
     args = parser.parse_args()
 
     run_latent_mapping(
@@ -103,5 +123,6 @@ if __name__ == '__main__':
         out_dir=args.out_dir,
         model_path=args.model,
         projection=args.projection,
-        color_by=args.color_by
+        color_by=args.color_by,
+        clusters=args.clusters
     )
