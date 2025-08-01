@@ -2,7 +2,7 @@
 SpectraMind V50 – Latent Space Extractor & Cluster Visualizer
 -------------------------------------------------------------
 Projects latent space using t-SNE or PCA and overlays KMeans cluster labels or metadata colors.
-Optionally generates SHAP × Symbolic overlays per cluster post-clustering.
+Automatically triggers SHAP + symbolic cluster scoring and diagnostics.
 """
 
 import os
@@ -46,7 +46,8 @@ def run_latent_mapping(
     projection="tsne",
     color_by="Teff",
     clusters: int = 0,
-    generate_overlay: bool = False
+    generate_overlay: bool = False,
+    score_symbolics: bool = False
 ):
     os.makedirs(out_dir, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -83,11 +84,9 @@ def run_latent_mapping(
     else:
         df["cluster_id"] = -1
 
-    # Save CSV
     csv_path = os.path.join(out_dir, f"latent_map_{projection}.csv")
     df.to_csv(csv_path, index=False)
 
-    # Plot
     png_path = os.path.join(out_dir, f"latent_map_{projection}.png")
     plt.figure(figsize=(10, 6))
     if clusters > 0:
@@ -118,6 +117,15 @@ def run_latent_mapping(
             "--outdir", "outputs/diagnostics/cluster_shap_overlay"
         ])
 
+    if score_symbolics and clusters > 0:
+        print("🔬 Running symbolic constraint scoring by cluster...")
+        subprocess.run([
+            "python", "score_clusters_symbolically.py",
+            "--submission-csv", "submission.csv",
+            "--cluster-csv", csv_path,
+            "--output-dir", "outputs/diagnostics/cluster_symbolic_scores"
+        ])
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description="SpectraMind V50 – Latent Space Projection")
@@ -126,8 +134,9 @@ if __name__ == '__main__':
     parser.add_argument("--out_dir", default="outputs/latents_v50")
     parser.add_argument("--projection", default="tsne", choices=["tsne", "pca"])
     parser.add_argument("--color_by", default="Teff")
-    parser.add_argument("--clusters", type=int, default=0, help="Number of KMeans clusters (0 = disable)")
-    parser.add_argument("--generate_overlay", action="store_true", help="Trigger SHAP × violation overlays by cluster")
+    parser.add_argument("--clusters", type=int, default=0)
+    parser.add_argument("--generate_overlay", action="store_true")
+    parser.add_argument("--score_symbolics", action="store_true")
     args = parser.parse_args()
 
     run_latent_mapping(
@@ -137,7 +146,6 @@ if __name__ == '__main__':
         projection=args.projection,
         color_by=args.color_by,
         clusters=args.clusters,
-        generate_overlay=args.generate_overlay
+        generate_overlay=args.generate_overlay,
+        score_symbolics=args.score_symbolics
     )
-
-
