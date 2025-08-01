@@ -3,8 +3,7 @@ SpectraMind V50 – Contrastive Pretraining Pipeline
 ---------------------------------------------------
 Runs contrastive learning using twin augmented AIRS/FGS1 views
 with Mamba + GNN encoder and projection head.
-Saves checkpoints and logs loss curve.
-Now supports optional curriculum transition into MAE pretraining.
+Saves checkpoints, logs to v50_debug_log.md, and optionally transitions to MAE.
 """
 
 import os
@@ -72,6 +71,10 @@ def run_contrastive_pretraining(config_path):
     save_dir = Path(cfg.get("save_dir", "outputs/contrastive_pretrain"))
     save_dir.mkdir(parents=True, exist_ok=True)
 
+    debug_log = Path("v50_debug_log.md")
+    with open(debug_log, "a") as f:
+        f.write(f"\n### Contrastive Pretraining Start\nConfig: {config_path}\n")
+
     all_latents = []
 
     print(f"🚀 Starting SpectraMind V50 contrastive pretraining ({cfg['epochs']} epochs)")
@@ -103,15 +106,24 @@ def run_contrastive_pretraining(config_path):
 
         avg_loss = total_loss / len(dataset)
         print(f"✅ Epoch {epoch+1}: Contrastive Loss = {avg_loss:.6f}")
+        with open(debug_log, "a") as f:
+            f.write(f"Epoch {epoch+1}: Contrastive Loss = {avg_loss:.6f}\n")
         torch.save(model.state_dict(), save_dir / f"model_epoch{epoch+1}.pt")
         all_latents.append(torch.cat(epoch_latents, dim=0))
+
+    with open(debug_log, "a") as f:
+        f.write(f"Contrastive pretraining complete. Final checkpoint: {save_dir}\n")
 
     print(f"🎉 Final checkpoints saved to: {save_dir}")
 
     # Curriculum: Transition to MAE from saved latents
     if cfg.get("auto_mae", False):
         latents_for_mae = torch.cat(all_latents, dim=0)
+        with open(debug_log, "a") as f:
+            f.write(f"Starting MAE pretraining from contrastive latents...\n")
         train_mae_from_latents(latents_for_mae, cfg.get("mae_config_path", "configs/pretrain/mae.yaml"))
+        with open(debug_log, "a") as f:
+            f.write(f"MAE pretraining completed.\n")
 
 if __name__ == "__main__":
     import argparse
