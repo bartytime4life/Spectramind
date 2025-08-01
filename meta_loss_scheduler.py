@@ -1,10 +1,17 @@
 """
 SpectraMind V50 – Meta Loss Scheduler
 -------------------------------------
-Dynamically adjusts weighting of symbolic vs. supervised loss components
-based on epoch, violation frequency, or curriculum stage.
-Supports ramping, cyclical, stepwise, and curriculum-sensitive modes.
+Dynamic symbolic loss weighting controller supporting multiple scheduling strategies:
+- constant
+- linear ramp
+- cyclical triangle
+- stepwise ramp
+- curriculum-based epoch mapping
+
+Logs, plots, and previews symbolic weights for debug and diagnostics.
 """
+
+import matplotlib.pyplot as plt
 
 class MetaLossScheduler:
     def __init__(
@@ -18,19 +25,19 @@ class MetaLossScheduler:
     ):
         """
         Args:
-            schedule_type: 'linear_ramp', 'constant', 'cyclical', 'step', or 'curriculum'
-            max_weight: maximum symbolic loss scaling
-            warmup_epochs: number of epochs to ramp up
-            total_epochs: total training epochs (used for cyclical or curriculum)
-            step_interval: interval for step increase
-            curriculum_epochs: optional list of (epoch, weight) tuples
+            schedule_type: one of ['linear_ramp', 'constant', 'cyclical', 'step', 'curriculum']
+            max_weight: maximum symbolic loss multiplier
+            warmup_epochs: ramping period for linear ramp
+            total_epochs: number of total training epochs (used by cyclical/step)
+            step_interval: interval size for step-wise schedule
+            curriculum_epochs: list of (epoch, weight) overrides
         """
         self.schedule_type = schedule_type
         self.max_weight = max_weight
         self.warmup_epochs = warmup_epochs
         self.total_epochs = total_epochs
         self.step_interval = step_interval
-        self.curriculum_epochs = curriculum_epochs or []
+        self.curriculum_epochs = sorted(curriculum_epochs or [])
 
     def get_weight(self, epoch: int) -> float:
         if self.schedule_type == "constant":
@@ -42,24 +49,37 @@ class MetaLossScheduler:
             return self.max_weight
 
         elif self.schedule_type == "cyclical":
-            cycle = (epoch % self.total_epochs) / self.total_epochs
-            return 0.5 * self.max_weight * (1 + abs(2 * cycle - 1))
+            phase = (epoch % self.total_epochs) / self.total_epochs
+            return 0.5 * self.max_weight * (1 + abs(2 * phase - 1))
 
         elif self.schedule_type == "step":
-            steps = epoch // self.step_interval
-            weight = min(self.max_weight, (steps + 1) * (self.max_weight / (self.total_epochs // self.step_interval)))
-            return weight
+            step_num = epoch // self.step_interval
+            max_steps = self.total_epochs // self.step_interval
+            weight = (step_num + 1) * (self.max_weight / max_steps)
+            return min(weight, self.max_weight)
 
         elif self.schedule_type == "curriculum":
-            applicable = [w for e, w in self.curriculum_epochs if epoch >= e]
-            return applicable[-1] if applicable else 0.0
+            for e, w in reversed(self.curriculum_epochs):
+                if epoch >= e:
+                    return w
+            return 0.0
 
         else:
             raise ValueError(f"Unknown schedule type: {self.schedule_type}")
 
-if __name__ == "__main__":
-    print("Testing MetaLossScheduler variants")
+    def plot(self, max_epochs=50, save_path="outputs/scheduler_preview.png"):
+        weights = [self.get_weight(e) for e in range(max_epochs)]
+        plt.figure(figsize=(8, 3))
+        plt.plot(weights, color="blue", linewidth=2)
+        plt.title(f"Symbolic Weight Schedule – {self.schedule_type}")
+        plt.xlabel("Epoch")
+        plt.ylabel("Symbolic Loss Weight")
+        plt.grid(True, linestyle=":", alpha=0.4)
+        plt.tight_layout()
+        plt.savefig(save_path)
+        print(f"📈 Schedule preview saved to {save_path}")
 
+if __name__ == "__main__":
     schedulers = {
         "linear_ramp": MetaLossScheduler("linear_ramp", max_weight=1.0, warmup_epochs=5),
         "constant": MetaLossScheduler("constant", max_weight=0.8),
@@ -73,3 +93,4 @@ if __name__ == "__main__":
         for epoch in range(20):
             w = sched.get_weight(epoch)
             print(f"Epoch {epoch:2d}: Weight = {w:.3f}")
+        sched.plot(max_epochs=20, save_path=f"outputs/schedule_{name}.png")
