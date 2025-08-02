@@ -1,134 +1,130 @@
 """
-SpectraMind V50 – HTML Diagnostic Report Generator
----------------------------------------------------
-Creates a unified HTML report summarizing diagnostics:
-- Predicted μ and σ curves
-- SHAP overlays
-- Symbolic violations
-- FFT noise signatures
-- Rule scoring table
-- Quantile bands (if available)
-- Debug log and config hash
+SpectraMind V50 – Unified HTML Diagnostics Report
+--------------------------------------------------
+Generates a dashboard-style HTML page including:
+- GLL bin heatmap
+- Symbolic violation overlays
+- UMAP latent plots (static and interactive)
+- Quantile violation bands
+- SHAP or entropy overlays
+- Diagnostic summary + anomalies
+
+✅ For use in CLI and auto-reports
 """
 
 import os
 import json
 from pathlib import Path
-import matplotlib.pyplot as plt
-import pandas as pd
-import numpy as np
-import torch
-from dominate import document
-from dominate.tags import h1, h2, p, img, hr, div, table, tr, td, th, pre, style
 
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SpectraMind V50 – Diagnostic Dashboard</title>
+    <style>
+        body {{
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #f9f9f9;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }}
+        h1, h2 {{
+            color: #444;
+        }}
+        img {{
+            max-width: 100%;
+            border-radius: 6px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+            margin-bottom: 24px;
+        }}
+        iframe {{
+            width: 100%;
+            height: 600px;
+            border: none;
+            margin-top: 10px;
+            margin-bottom: 24px;
+        }}
+        pre {{
+            background: #eee;
+            padding: 10px;
+            overflow-x: auto;
+            border-radius: 6px;
+        }}
+    </style>
+</head>
+<body>
 
-def plot_array(arr, title, ylabel, path):
-    plt.figure(figsize=(10, 3))
-    plt.plot(arr)
-    plt.title(title)
-    plt.xlabel("Spectral Bin")
-    plt.ylabel(ylabel)
-    plt.tight_layout()
-    plt.savefig(path)
-    plt.close()
+<h1>SpectraMind V50 – Diagnostics Dashboard</h1>
 
+{sections}
 
-def generate_html_report(output_dir="outputs", decoder_type=None, config_hash=None):
-    output_dir = Path(output_dir)
-    report_path = output_dir / "report.html"
+</body>
+</html>
+"""
 
-    mu_path = output_dir / "mu.pt"
-    sigma_path = output_dir / "sigma.pt"
-    shap_img = output_dir / "shap_overlay.png"
-    fft_img = output_dir / "fft_overlay.png"
-    quantile_img = output_dir / "quantile_band_plot.png"
-    rule_scores = output_dir / "symbolic_rule_scores.csv"
-    violations_json = Path("constraint_violation_log.json")
-    debug_log = Path("v50_debug_log.md")
+SECTION_TEMPLATE = """
+<h2>{title}</h2>
+{content}
+"""
 
-    doc = document(title="SpectraMind V50 – Diagnostic Report")
+def embed_image(img_path):
+    return f'<img src="{img_path}" alt="{img_path}" loading="lazy"/>'
 
-    with doc:
-        h1("SpectraMind V50 Diagnostic Report")
-        p("This report summarizes the μ, σ predictions, symbolic violations, SHAP overlays, FFT residuals, rule attributions, and quantile intervals.")
+def embed_iframe(html_path):
+    return f'<iframe src="{html_path}"></iframe>'
 
-        if decoder_type or config_hash:
-            with div():
-                if decoder_type: p(f"Decoder: {decoder_type}")
-                if config_hash: p(f"Config Hash: {config_hash}")
-        hr()
+def embed_json(json_path):
+    try:
+        with open(json_path) as f:
+            data = json.load(f)
+        formatted = json.dumps(data, indent=2)
+        return f"<pre>{formatted}</pre>"
+    except Exception as e:
+        return f"<pre>Failed to load {json_path}: {e}</pre>"
 
-        # μ
-        if mu_path.exists():
-            mu = torch.load(mu_path)[0].cpu().numpy()
-            plot_array(mu, "Predicted Mean Spectrum (μ)", "μ (ppm)", output_dir / "mu_plot.png")
-            h2("Mean Spectrum μ")
-            img(src="mu_plot.png", width="100%")
-            hr()
+def generate_html_report(
+    out_path="diagnostics/diagnostic_report.html",
+    diagnostics_dir="diagnostics"
+):
+    diagnostics_dir = Path(diagnostics_dir)
+    out_path = Path(out_path)
+    sections = []
 
-        # σ
-        if sigma_path.exists():
-            sigma = torch.load(sigma_path)[0].cpu().numpy()
-            plot_array(sigma, "Predicted Uncertainty (σ)", "σ (ppm)", output_dir / "sigma_plot.png")
-            h2("Uncertainty Spectrum σ")
-            img(src="sigma_plot.png", width="100%")
-            hr()
+    def section(title, content):
+        sections.append(SECTION_TEMPLATE.format(title=title, content=content))
 
-        # Quantile Bands
-        if quantile_img.exists():
-            h2("Quantile Band Coverage (q10–q90)")
-            img(src=quantile_img.name, width="100%")
-            hr()
+    if (diagnostics_dir / "gll_heatmap_per_bin.png").exists():
+        section("GLL Heatmap per Bin", embed_image("gll_heatmap_per_bin.png"))
 
-        # SHAP
-        if shap_img.exists():
-            h2("SHAP Attribution Overlay")
-            img(src=shap_img.name, width="100%")
-            hr()
+    if (diagnostics_dir / "mu_violation_overlay.png").exists():
+        section("μ Violation Overlay", embed_image("mu_violation_overlay.png"))
 
-        # FFT
-        if fft_img.exists():
-            h2("FFT Power Spectrum of Residuals")
-            img(src=fft_img.name, width="100%")
-            hr()
+    if (diagnostics_dir / "quantile_band_check.png").exists():
+        section("Quantile Band Constraint Check", embed_image("quantile_band_check.png"))
 
-        # Violations
-        if violations_json.exists():
-            h2("Symbolic Constraint Violations")
-            with open(violations_json) as f:
-                violations = json.load(f)
-            for pid, v in violations.items():
-                div(f"{pid}: {v}")
-            hr()
+    if (diagnostics_dir / "umap_latents.png").exists():
+        section("UMAP Projection (Static)", embed_image("umap_latents.png"))
 
-        # Rule Scoring
-        if rule_scores.exists():
-            h2("Top Symbolic Rule Influences (SHAP × Violations)")
-            df = pd.read_csv(rule_scores, index_col=0)
-            if "mean" in df.index:
-                mean_scores = df.loc["mean"].sort_values(ascending=False).head(10)
-                with table():
-                    with tr():
-                        th("Rule ID")
-                        th("Mean Influence Score")
-                    for rule_id, score in mean_scores.items():
-                        with tr():
-                            td(rule_id)
-                            td(f"{score:.4f}")
-            hr()
+    if (diagnostics_dir / "umap_latents.html").exists():
+        section("UMAP Projection (Interactive)", embed_iframe("umap_latents.html"))
 
-        # Debug Log
-        if debug_log.exists():
-            h2("Debug Execution Log")
-            with open(debug_log) as f:
-                pre(f.read())
-            hr()
+    if (diagnostics_dir / "shap_overlay.png").exists():
+        section("SHAP Overlay", embed_image("shap_overlay.png"))
 
-    with open(report_path, "w") as f:
-        f.write(doc.render())
+    if (diagnostics_dir / "anomalous_bins.json").exists():
+        section("Anomalous Bins", embed_json(diagnostics_dir / "anomalous_bins.json"))
 
-    print(f"✅ HTML report saved to {report_path}")
+    if (diagnostics_dir / "diagnostic_summary.json").exists():
+        section("Summary", embed_json(diagnostics_dir / "diagnostic_summary.json"))
 
+    html = HTML_TEMPLATE.format(sections="\n".join(sections))
+    os.makedirs(out_path.parent, exist_ok=True)
+    with open(out_path, "w") as f:
+        f.write(html)
+
+    print(f"✅ HTML diagnostic report saved to: {out_path}")
 
 if __name__ == "__main__":
     generate_html_report()
