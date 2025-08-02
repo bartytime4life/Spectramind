@@ -68,9 +68,9 @@ def run_corel_if_available():
         mu_corr, sigma_corr = apply_corel(model, mu, sigma, edge_index)
         torch.save(mu_corr, "outputs/mu_corel.pt")
         torch.save(sigma_corr, "outputs/sigma_corel.pt")
-        print("✅ COREL outputs saved.")
+        print(f"✅ COREL complete: μ{tuple(mu_corr.shape)}, σ{tuple(sigma_corr.shape)}")
     else:
-        print("⚠️ COREL skipped: missing inputs.")
+        print("⚠️ Skipping COREL: required files missing.")
 
 def generate_zip(symbolic_only=False, finalize_only=False, diagnostics_only=False):
     if not diagnostics_only:
@@ -90,21 +90,25 @@ def generate_zip(symbolic_only=False, finalize_only=False, diagnostics_only=Fals
     timestamp = datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S")
     zipname = f"spectramind_v50_submission_{timestamp}.zip"
 
-    files = SYMBOLIC_ONLY_FILES if symbolic_only else FULL_FILES
+    selected_files = SYMBOLIC_ONLY_FILES if symbolic_only else FULL_FILES
+    missing = []
+
     with zipfile.ZipFile(zipname, "w", zipfile.ZIP_DEFLATED) as zipf:
-        for path in files:
+        for path in selected_files:
             if os.path.exists(path):
                 zipf.write(path, arcname=os.path.relpath(path))
                 print(f"✅ Included: {path}")
             else:
                 print(f"⚠️ Missing: {path}")
+                missing.append(path)
 
-    print(f"\n📦 Submission ZIP created: {zipname}")
+    print(f"\n✅ Submission ZIP created: {zipname}")
 
     with open("v50_debug_log.md", "a") as log:
-        log.write(f"\n### Submission Package Created: {zipname}\n")
-        for f in files:
-            log.write(f"- {f}\n")
+        log.write(f"\n## 📦 Submission Package: `{zipname}`\n")
+        log.write(f"⏱ Timestamp: {timestamp}\n")
+        for f in selected_files:
+            log.write(f"- {'[MISSING] ' if f in missing else ''}{f}\n")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -112,6 +116,9 @@ if __name__ == "__main__":
     parser.add_argument("--diagnostics-only", action="store_true", help="Run only diagnostics (skip finalizer)")
     parser.add_argument("--finalize-only", action="store_true", help="Run only finalizer (skip diagnostics)")
     args = parser.parse_args()
+
+    if args.finalize_only and args.diagnostics_only:
+        raise ValueError("❌ Cannot use --finalize-only and --diagnostics-only together.")
 
     generate_zip(
         symbolic_only=args.symbolic_only,
