@@ -1,7 +1,8 @@
 """
 SpectraMind V50 – Diagnostic CLI
 --------------------------------
-Run symbolic overlays, UMAP/t-SNE projections, scoring checks, and full diagnostics dashboard generation.
+Run symbolic overlays, UMAP/t-SNE projections, scoring checks,
+and full diagnostics dashboard generation with CLI logging.
 """
 
 import typer
@@ -10,6 +11,7 @@ from pathlib import Path
 import re
 import webbrowser
 import json
+import sys
 from datetime import datetime
 
 from submission_validator_v50 import validate_submission
@@ -19,6 +21,35 @@ from generate_html_report import generate_html_report
 
 app = typer.Typer(help="SpectraMind V50 – Diagnostics CLI")
 
+# --- CLI Logging Setup ---
+__VERSION__ = "v50.1.0"
+__HASH_FILE__ = Path("run_hash_summary_v50.json")
+__LOG_FILE__ = Path("v50_debug_log.md")
+
+def get_latest_config_hash():
+    if __HASH_FILE__.exists():
+        with open(__HASH_FILE__) as f:
+            data = json.load(f)
+            if data:
+                last_tag = list(data.keys())[-1]
+                return data[last_tag].get("hash", "unknown")
+    return "unknown"
+
+def log_cli_call():
+    cmd = " ".join(sys.argv)
+    hash_val = get_latest_config_hash()
+    now = datetime.utcnow().isoformat()
+    entry = f"\n### CLI Call @ {now}\n- Command: `{cmd}`\n- Version: {__VERSION__}\n- Config Hash: {hash_val}\n"
+    if __LOG_FILE__.exists():
+        __LOG_FILE__.write_text(__LOG_FILE__.read_text() + entry)
+    else:
+        __LOG_FILE__.write_text(entry)
+
+@app.callback()
+def log():
+    log_cli_call()
+
+# ------------------------------- Commands -------------------------------
 
 @app.command("summary")
 def run_diagnostic_summary(
@@ -41,13 +72,13 @@ def run_diagnostic_summary(
 
 @app.command("umap-latents")
 def umap_latent_plot(
-    config: str = typer.Option("configs/config_v50.yaml"),
-    checkpoint: str = typer.Option("outputs/model.pt"),
-    tag: str = typer.Option("v50"),
-    out_png: str = typer.Option("diagnostics/umap_latents.png"),
-    out_html: str = typer.Option("diagnostics/umap_latents.html"),
-    overlay_csv: str = typer.Option(None, help="Optional .csv with planet_id and label"),
-    overlay_column: str = typer.Option("symbolic_class", help="Column to use for color overlay"),
+    config: str = "configs/config_v50.yaml",
+    checkpoint: str = "outputs/model.pt",
+    tag: str = "v50",
+    out_png: str = "diagnostics/umap_latents.png",
+    out_html: str = "diagnostics/umap_latents.html",
+    overlay_csv: str = None,
+    overlay_column: str = "symbolic_class",
     batch_size: int = 64,
     n_neighbors: int = 30,
     min_dist: float = 0.1
@@ -70,11 +101,11 @@ def umap_latent_plot(
 
 @app.command("tsne-latents")
 def tsne_latent_plot(
-    config: str = typer.Option("configs/config_v50.yaml"),
-    checkpoint: str = typer.Option("outputs/model.pt"),
-    html_out: str = typer.Option("diagnostics/tsne_latents.html"),
-    overlay_csv: str = typer.Option(None),
-    overlay_column: str = typer.Option("symbolic_class")
+    config: str = "configs/config_v50.yaml",
+    checkpoint: str = "outputs/model.pt",
+    html_out: str = "diagnostics/tsne_latents.html",
+    overlay_csv: str = None,
+    overlay_column: str = "symbolic_class"
 ):
     cmd = [
         "python", "plot_tsne_interactive.py",
@@ -147,7 +178,6 @@ def full_dashboard(
     if open_browser:
         webbrowser.open(out_path.resolve().as_uri())
 
-    # ✅ Write diagnostics report JSON
     report = {
         "timestamp": datetime.utcnow().isoformat(),
         "umap_included": not no_umap,
