@@ -1,6 +1,6 @@
 """
-SpectraMind V50 – Diagnostic Summary Generator (Ultimate)
-----------------------------------------------------------
+SpectraMind V50 – Diagnostic Summary Generator (Beyond Ultimate)
+----------------------------------------------------------------
 Performs full-spectrum diagnostics:
 - GLL, MAE, RMSE, σ calibration
 - Z-score and residual plots
@@ -49,15 +49,20 @@ def plot_zscore_and_fft(mu, sigma, y, outdir="diagnostics"):
     plt.savefig(os.path.join(outdir, "sigma_vs_residual_std.png"))
     plt.close()
 
+    fft_dict = {}
     plt.figure()
     for i in range(min(3, residuals.shape[0])):
         fft = np.abs(np.fft.rfft(residuals[i]))
+        fft_dict[f"planet_{i}"] = fft.tolist()
         plt.plot(fft, label=f"Planet {i}")
     plt.title("FFT Power of Residuals")
     plt.legend()
     plt.grid(True)
     plt.savefig(os.path.join(outdir, "fft_residuals.png"))
     plt.close()
+
+    with open(os.path.join(outdir, "per_bin_fft.json"), "w") as f:
+        json.dump(fft_dict, f, indent=2)
 
 
 def gll_score(y, mu, sigma):
@@ -73,6 +78,7 @@ def generate_diagnostic_summary(
     shap: Optional[np.ndarray] = None,
     entropy: Optional[np.ndarray] = None,
     violations: Optional[np.ndarray] = None,
+    fused_overlay: Optional[np.ndarray] = None,
     outdir: str = "outputs/diagnostics",
     save_json: bool = True,
     symbolic_config: Optional[dict] = None,
@@ -112,7 +118,7 @@ def generate_diagnostic_summary(
             with open(os.path.join(outdir, "constraint_violation_log.json"), "w") as f:
                 json.dump(violations.tolist(), f, indent=2)
 
-    # --- Section 4: SHAP + entropy + symbolic fusion ---
+    # --- Section 4: SHAP + entropy + symbolic fusion miner ---
     if shap is not None and entropy is not None and violations is not None:
         print("⚠️ Mining anomalous bins from SHAP+Entropy+Violations...")
         events = mine_anomalous_bins({
@@ -126,6 +132,14 @@ def generate_diagnostic_summary(
         if save_json:
             with open(os.path.join(outdir, "anomalous_bins.json"), "w") as f:
                 json.dump({"bins": events}, f, indent=2)
+
+    # --- Section 4b: Fused SHAP+Attention Overlay ---
+    if fused_overlay is not None:
+        summary["fused_overlay_top10_bins"] = np.argsort(fused_overlay)[-10:][::-1].tolist()
+        summary["fused_overlay_entropy"] = float(
+            -np.sum(fused_overlay * np.log(fused_overlay + 1e-8))
+        )
+        summary["fused_overlay_mean"] = float(np.mean(fused_overlay))
 
     # --- Section 5: Quantile band analysis ---
     print("📐 Computing quantile bands...")
