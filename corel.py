@@ -1,34 +1,42 @@
 """
-corel.py – SpectralCOREL with Temporal Correlation
---------------------------------------------------
-GNN-based conformal uncertainty model for spectral bins with:
-- Learned positional encodings for bin index
-- GATConv for attention over bin neighbors
+corel.py – SpectralCOREL with Temporal Attention + Positional Encoding
+-----------------------------------------------------------------------
+GAT-based conformal uncertainty model using:
+- Learned or sinusoidal bin position embeddings
+- Attention over spectral bins
+- Residual-corrected μ and conformal radii
 """
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import GATConv
+import math
 
 
 class SpectralCOREL(nn.Module):
-    def __init__(self, input_dim=1, hidden_dim=64, num_bins=283, posenc_dim=16, coverage=0.90, heads=4):
-        """
-        Args:
-            input_dim: input node dim (e.g., σ only)
-            hidden_dim: hidden GNN dim
-            num_bins: number of spectral bins
-            posenc_dim: positional encoding dim
-            coverage: confidence level (1 - α)
-            heads: number of attention heads for GATConv
-        """
+    def __init__(
+        self,
+        input_dim=1,
+        hidden_dim=64,
+        num_bins=283,
+        posenc_dim=16,
+        posenc_type="learned",  # "learned" or "sinusoidal"
+        coverage=0.90,
+        heads=4
+    ):
         super().__init__()
         self.num_bins = num_bins
         self.coverage = coverage
+        self.posenc_type = posenc_type
+        self.posenc_dim = posenc_dim
 
-        # Learned positional encoding (bin index → embedding)
-        self.positional_encoding = nn.Embedding(num_bins, posenc_dim)
+        if posenc_type == "learned":
+            self.positional_encoding = nn.Embedding(num_bins, posenc_dim)
+        elif posenc_type == "sinusoidal":
+            self.register_buffer("pe_sin", self._build_sinusoidal(num_bins, posenc_dim))
+        else:
+            raise ValueError("posenc_type must be 'learned' or 'sinusoidal'")
 
         self.gnn1 = GATConv(input_dim + posenc_dim, hidden_dim, heads=heads, concat=True)
         self.gnn2 = GATConv(hidden_dim * heads, hidden_dim, heads=1)
@@ -36,31 +44,28 @@ class SpectralCOREL(nn.Module):
         self.out_mean = nn.Linear(hidden_dim, 1)
         self.out_radius = nn.Linear(hidden_dim, 1)
 
+    def _build_sinusoidal(self, num_pos, dim):
+        pe = torch.zeros(num_pos, dim)
+        position = torch.arange(0, num_pos).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, dim, 2) * -(math.log(10000.0) / dim))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        return pe  # shape: (num_bins, posenc_dim)
+
     def forward(self, mu_pred: torch.Tensor, sigma_pred: torch.Tensor, edge_index: torch.Tensor):
-        """
-        Args:
-            mu_pred: (B, 283) predicted μ
-            sigma_pred: (B, 283) predicted σ
-            edge_index: (2, E) graph of bin connectivity (shared across batch)
-
-        Returns:
-            mu_corr: (B, 283) refined μ
-            r_corr: (B, 283) conformal radii
-        """
         B, N = mu_pred.shape
-        assert N == self.num_bins, f"Expected {self.num_bins} bins, got {N}"
+        assert N == self.num_bins
 
-        device = sigma_pred.device
-        pos_idx = torch.arange(N, device=device)
-
-        # Expand positional encodings
-        pe = self.positional_encoding(pos_idx)  # (N, posenc_dim)
+        if self.posenc_type == "learned":
+            pos_enc = self.positional_encoding(torch.arange(N, device=sigma_pred.device))  # (N, posenc_dim)
+        else:  # sinusoidal
+            pos_enc = self.pe_sin[:N].to(sigma_pred.device)
 
         mu_out, r_out = [], []
 
         for b in range(B):
             x = sigma_pred[b].unsqueeze(-1)  # (N, 1)
-            x = torch.cat([x, pe], dim=-1)   # (N, 1 + posenc)
+            x = torch.cat([x, pos_enc], dim=-1)
 
             h = F.elu(self.gnn1(x, edge_index))
             h = F.elu(self.gnn2(h, edge_index))
@@ -76,19 +81,20 @@ class SpectralCOREL(nn.Module):
 
 @torch.no_grad()
 def conformalize_from_validation(val_errors: torch.Tensor, alpha: float = 0.10) -> float:
-    """Quantile thresholding for global conformal radius"""
+    """Returns q̂ such that Pr(|y - μ| ≤ q̂) ≥ 1 - α"""
     return torch.quantile(val_errors, 1 - alpha).item()
 
 
 # --- Smoke Test ---
 if __name__ == "__main__":
-    model = SpectralCOREL()
-    mu = torch.randn(4, 283)
-    sigma = torch.abs(torch.randn(4, 283))
+    for mode in ["learned", "sinusoidal"]:
+        print(f"\n🧪 Testing SpectralCOREL with posenc_type='{mode}'")
+        model = SpectralCOREL(posenc_type=mode)
+        mu = torch.randn(2, 283)
+        sigma = torch.abs(torch.randn(2, 283))
 
-    edge_list = [[i, i+1] for i in range(282)] + [[i+1, i] for i in range(282)]
-    edge_index = torch.tensor(edge_list).t().contiguous()
+        edge_list = [[i, i+1] for i in range(282)] + [[i+1, i] for i in range(282)]
+        edge_index = torch.tensor(edge_list).t().contiguous()
 
-    mu_corr, r_corr = model(mu, sigma, edge_index)
-    print("✅ Temporal SpectralCOREL test passed.")
-    print("μ shape:", mu_corr.shape, "| radius shape:", r_corr.shape)
+        mu_corr, r_corr = model(mu, sigma, edge_index)
+        print(f"μ shape: {mu_corr.shape} | radius shape: {r_corr.shape}")
