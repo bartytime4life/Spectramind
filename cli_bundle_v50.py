@@ -1,58 +1,67 @@
 """
-SpectraMind V50 – Submission Orchestration & Bundling CLI
-----------------------------------------------------------
-Typer-based CLI to automate:
-• Training → inference → validation → submission.zip
-• Symbolic + diagnostic artifact bundling
-• Hash logging, manifest zipping, and HTML overlay capture
-
-Includes: `make-submission`, `bundle-submission`, `full-run`
+SpectraMind V50 – Orchestration CLI (Full)
+-------------------------------------------
+Automates end-to-end challenge pipeline:
+• Train → Infer → COREL → Validate → Bundle
+• Logs config hash, generates dashboard HTML
+• Prepares full leaderboard-ready submission ZIP
 """
 
 import typer
 import yaml
 import os
 import json
-from datetime import datetime
+import torch
 from pathlib import Path
-from generate_submission_package import generate_zip
-from submission_validator_v50 import validate_submission
+from datetime import datetime
+
 from train_v50 import train_from_config
 from predict_v50 import run as run_inference
+from submission_validator_v50 import validate_submission
+from generate_diagnostic_summary import generate_diagnostic_summary
+from generate_html_report import generate_html_report
+from generate_submission_package import generate_zip
 from corel_inference import load_corel_model, apply_corel
-import torch
 
-app = typer.Typer(help="SpectraMind V50 – CLI for bundling, submission, and automation")
 
-@app.command()
-def bundle_submission(
-    config: Path = typer.Option("configs/config_v50.yaml"),
-    symbolic_only: bool = typer.Option(False, help="Only include symbolic & reproducibility files"),
-    finalize_only: bool = typer.Option(False, help="Only finalize pipeline outputs, skip diagnostics"),
-    diagnostics_only: bool = typer.Option(False, help="Run diagnostics but skip finalizer")
-):
-    """Bundle submission.zip from outputs, manifest, logs, diagnostics"""
-    generate_zip(
-        symbolic_only=symbolic_only,
-        finalize_only=finalize_only,
-        diagnostics_only=diagnostics_only
-    )
+app = typer.Typer(help="SpectraMind V50 – Full Challenge Pipeline CLI")
+
+
+def log_hash(cfg, tag="default"):
+    import hashlib
+    hash_str = hashlib.md5(json.dumps(cfg, sort_keys=True).encode()).hexdigest()
+    summary_path = Path("run_hash_summary_v50.json")
+    record = {
+        "run_tag": tag,
+        "hash": hash_str,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+    if summary_path.exists():
+        data = json.load(open(summary_path))
+    else:
+        data = {}
+    data[tag] = record
+    json.dump(data, open(summary_path, "w"), indent=2)
+    return hash_str
+
 
 @app.command()
 def make_submission(
     config: Path = typer.Option("configs/config_v50.yaml"),
-    conformalize: bool = typer.Option(True, help="Apply COREL conformal bounds to μ/σ"),
-    bundle: bool = typer.Option(True, help="Bundle final ZIP after run"),
-    validate: bool = typer.Option(True, help="Validate submission.csv contents")
+    conformalize: bool = typer.Option(True),
+    bundle: bool = typer.Option(True),
+    validate: bool = typer.Option(True),
+    diagnostics: bool = typer.Option(True),
+    tag: str = typer.Option("spectramind_v50")
 ):
-    """Train → inference → conformalize → validate → package"""
-    with open(config) as f:
-        cfg = yaml.safe_load(f)
+    """Run full pipeline: train, infer, calibrate, diagnose, bundle"""
 
-    typer.echo("\n🚀 Training model...")
-    train_from_config(cfg)
+    cfg = yaml.safe_load(open(config))
 
-    typer.echo("\n🧠 Running inference...")
+    typer.echo(f"\n🚀 Training model...")
+    train_from_config(cfg, tag=tag)
+
+    typer.echo(f"\n🧠 Running inference...")
     run_inference()
 
     if conformalize:
@@ -62,26 +71,37 @@ def make_submission(
         edge_index = torch.load("calibration_data/edge_index.pt")
         model = load_corel_model("models/corel_gnn.pt")
         mu_corr, sigma_corr = apply_corel(model, mu, sigma, edge_index)
-        torch.save(mu_corr, "outputs/mu_corel.pt")
-        torch.save(sigma_corr, "outputs/sigma_corel.pt")
-        typer.echo("✅ COREL complete")
+        torch.save(mu_corr, "outputs/mu.pt")
+        torch.save(sigma_corr, "outputs/sigma.pt")
+        typer.echo("✅ COREL applied.")
 
     if validate:
-        typer.echo("\n📏 Validating submission.csv...")
-        validate_submission("submission.csv")
+        typer.echo(f"\n📏 Validating submission...")
+        validate_submission("outputs/submission.csv")
+
+    if diagnostics:
+        typer.echo(f"\n🩺 Generating diagnostic overlays...")
+        mu = torch.load("outputs/mu.pt").numpy()
+        sigma = torch.load("outputs/sigma.pt").numpy()
+        y = torch.load("outputs/y.pt").numpy()
+        generate_diagnostic_summary(mu, sigma, y)
+        generate_html_report()
 
     if bundle:
-        typer.echo("\n📦 Bundling outputs...")
+        typer.echo(f"\n📦 Creating submission bundle...")
         generate_zip()
 
-    typer.echo("\n✅ Done!")
+    typer.echo(f"\n🔁 Logging hash...")
+    log_hash(cfg, tag=tag)
+
+    typer.echo(f"\n✅ Submission ready! Use ZIP in leaderboard upload.")
+
 
 @app.command()
-def full_run(
-    config: Path = typer.Option("configs/config_v50.yaml"),
-):
-    """Alias: run entire pipeline and generate ZIP"""
-    make_submission(config=config, conformalize=True, bundle=True, validate=True)
+def full_run(config: Path = typer.Option("configs/config_v50.yaml")):
+    """Alias for make-submission with defaults"""
+    make_submission(config=config)
+
 
 if __name__ == "__main__":
     app()
