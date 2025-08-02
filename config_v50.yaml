@@ -1,0 +1,108 @@
+paths:
+  train_data_dir: ./data_v50/train
+  test_data_dir: ./data_v50/test
+  metadata_file: ./data_v50/train.csv
+  model_save_dir: ./outputs/v50_checkpoints
+  submission_dir: ./outputs/submissions
+  diagnostics_dir: ./diagnostics
+  latent_dir: ./diagnostics/latents_v50
+
+training:
+  seed: 42
+  n_folds: 5
+  epochs: 60
+  batch_size: 32
+  learning_rate: 3e-4
+  weight_decay: 1e-5
+  num_workers: 4
+
+  loss_weights:
+    gll: 1.0
+    smooth: 0.2
+    nonneg: 0.05
+    entropy: 0.1
+    symbolic: 0.1
+    corel: 0.1
+    pinball: 0.1
+
+  scheduler:
+    type: cosine
+    warmup_epochs: 5
+
+inference:
+  batch_size: 64
+  mc_dropout_passes: 20
+  temperature_scaling: true
+  quantile_calibration: true
+
+model_target:
+  output_dim: 567
+  meta_dim: 8
+  meta_out_dim: 64
+  fgs_out_dim: 256
+  airs_out_dim: 512
+  fusion_dim: 768
+  decoder_hidden_dim: 768
+  decoder_layers: 4
+  fgs_backbone: mamba_ssm
+  airs_backbone: gnn_spectral
+  decoder_type: transformer
+  use_cross_attention: true
+  use_lora: false
+  freeze_backbone: false
+
+model_draft:
+  output_dim: 567
+  meta_dim: 8
+  meta_out_dim: 32
+  fgs_out_dim: 128
+  airs_out_dim: 256
+  fusion_dim: 384
+  decoder_hidden_dim: 384
+  decoder_layers: 2
+  fgs_backbone: mamba_light
+  airs_backbone: gnn_light
+  decoder_type: transformer
+  use_cross_attention: false
+  use_lora: false
+  freeze_backbone: true
+
+augmentation:
+  enable: true
+  mae_mask_ratio: 0.75
+  jitter_injection: true
+  spectral_drop: true
+
+mae_pretrain:
+  epochs: 100
+  batch_size: 64
+  learning_rate: 5e-4
+  mask_ratio: 0.75
+  reconstruction_loss: mse
+
+tools:
+  fft_overlay_dir: diagnostics/fft_overlay
+  violation_dir: diagnostics/violations
+  confidence_dir: diagnostics/confidence_maps
+  latent_dir: diagnostics/latents_v50
+  shap_overlay_dir: diagnostics/shap_overlay
+  alignment_dir: diagnostics/template_alignments
+  ablation_dir: ablation_results
+  cluster_dir: diagnostics/symbolic_clusters
+  html_dashboard: diagnostics/diagnostic_report.html
+
+metadata_columns:
+  - Rs
+  - Ms
+  - Ts
+  - Mp
+  - e
+  - P
+  - sma
+  - i
+
+reproducibility:
+  mlflow_tracking: true
+  dvc_enabled: true
+  git_hash_logging: true
+  run_log_file: v50_debug_log.md
