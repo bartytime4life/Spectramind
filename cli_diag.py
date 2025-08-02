@@ -9,12 +9,16 @@ import subprocess
 from pathlib import Path
 import re
 import webbrowser
+import json
+from datetime import datetime
+
 from submission_validator_v50 import validate_submission
 from evaluate_gll_v50 import evaluate_and_log_gll
 from generate_diagnostic_summary import generate_diagnostic_summary
 from generate_html_report import generate_html_report
 
 app = typer.Typer(help="SpectraMind V50 – Diagnostics CLI")
+
 
 @app.command("summary")
 def run_diagnostic_summary(
@@ -37,13 +41,13 @@ def run_diagnostic_summary(
 
 @app.command("umap-latents")
 def umap_latent_plot(
-    config: str = "configs/config_v50.yaml",
-    checkpoint: str = "outputs/model.pt",
-    tag: str = "v50",
-    out_png: str = "diagnostics/umap_latents.png",
-    out_html: str = "diagnostics/umap_latents.html",
-    overlay_csv: str = None,
-    overlay_column: str = "symbolic_class",
+    config: str = typer.Option("configs/config_v50.yaml"),
+    checkpoint: str = typer.Option("outputs/model.pt"),
+    tag: str = typer.Option("v50"),
+    out_png: str = typer.Option("diagnostics/umap_latents.png"),
+    out_html: str = typer.Option("diagnostics/umap_latents.html"),
+    overlay_csv: str = typer.Option(None, help="Optional .csv with planet_id and label"),
+    overlay_column: str = typer.Option("symbolic_class", help="Column to use for color overlay"),
     batch_size: int = 64,
     n_neighbors: int = 30,
     min_dist: float = 0.1
@@ -66,11 +70,11 @@ def umap_latent_plot(
 
 @app.command("tsne-latents")
 def tsne_latent_plot(
-    config: str = "configs/config_v50.yaml",
-    checkpoint: str = "outputs/model.pt",
-    html_out: str = "diagnostics/tsne_latents.html",
-    overlay_csv: str = None,
-    overlay_column: str = "symbolic_class"
+    config: str = typer.Option("configs/config_v50.yaml"),
+    checkpoint: str = typer.Option("outputs/model.pt"),
+    html_out: str = typer.Option("diagnostics/tsne_latents.html"),
+    overlay_csv: str = typer.Option(None),
+    overlay_column: str = typer.Option("symbolic_class")
 ):
     cmd = [
         "python", "plot_tsne_interactive.py",
@@ -143,7 +147,20 @@ def full_dashboard(
     if open_browser:
         webbrowser.open(out_path.resolve().as_uri())
 
+    # ✅ Write diagnostics report JSON
+    report = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "umap_included": not no_umap,
+        "tsne_included": not no_tsne,
+        "html_file": str(out_path),
+        "overlay_column": overlay_column,
+        "overlay_csv": overlay_csv or "None"
+    }
+    with open(diagnostics_dir / "diagnostics_report.json", "w") as f:
+        json.dump(report, f, indent=2)
+
     print(f"✅ Dashboard ready: {out_path}")
+    print("📝 Summary written to: diagnostics/diagnostics_report.json")
 
 
 if __name__ == "__main__":
