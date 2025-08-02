@@ -1,0 +1,14 @@
+# configs/model/flow_uncertainty_head.yaml
+
+_target_: flow_uncertainty_head.FlowUncertaintyHead
+latent_dim: 128
+mu_dim: 283
+hidden_dim: 256
+use_mu: true
+residual_sigma: false
+output_type: sigma
+fusion_mode: concat
+symbolic_dim: 283
+dropout: 0.1
+layer_norm: true
+min_sigma: 1e-4
