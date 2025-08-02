@@ -1,0 +1,28 @@
+# export_scripted_sigma_decoder.py
+
+import torch
+from flow_uncertainty_head import FlowUncertaintyHead
+
+model = FlowUncertaintyHead(
+    latent_dim=128,
+    mu_dim=283,
+    hidden_dim=256,
+    use_mu=True,
+    residual_sigma=False,
+    output_type="sigma",
+    fusion_mode="concat",
+    symbolic_dim=283,
+    dropout=0.1,
+    layer_norm=False
+)
+model.eval()
+
+# Sample dummy input for tracing
+z = torch.randn(1, 128)
+mu = torch.randn(1, 283)
+symbolic = torch.randn(1, 283)
+
+# Trace with example input
+traced = torch.jit.trace(model, (z, mu, symbolic))
+traced.save("flow_uncertainty_head.pt")
+print("✅ TorchScript model exported: flow_uncertainty_head.pt")
