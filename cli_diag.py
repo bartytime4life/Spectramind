@@ -1,14 +1,15 @@
 """
 SpectraMind V50 – Diagnostic CLI
 --------------------------------
-Run various diagnostics: GLL overlays, FFT maps, symbolic violations, latent UMAP, SHAP overlays, etc.
+Run scientific QA tools: GLL maps, symbolic overlays, UMAP latents, HTML dashboards.
 """
 
 import typer
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
-app = typer.Typer(help="SpectraMind V50 – Diagnostics CLI")
+app = typer.Typer(help="SpectraMind V50 – Diagnostics Toolkit")
+
 
 @app.command("summary")
 def run_diagnostic_summary(
@@ -35,17 +36,17 @@ def run_diagnostic_summary(
 
 @app.command("umap-latents")
 def umap_latent_plot(
-    config: str = typer.Option("configs/config_v50.yaml", help="Path to config YAML"),
-    checkpoint: str = typer.Option("outputs/model.pt", help="Path to model checkpoint"),
-    tag: str = typer.Option("v50", help="Tag for saving latents"),
-    out_png: str = typer.Option("diagnostics/umap_latents.png", help="Static PNG output"),
-    out_html: str = typer.Option("diagnostics/umap_latents.html", help="Interactive HTML output"),
+    config: str = typer.Option("configs/config_v50.yaml"),
+    checkpoint: str = typer.Option("outputs/model.pt"),
+    tag: str = typer.Option("v50"),
+    out_png: str = typer.Option("diagnostics/umap_latents.png"),
+    out_html: str = typer.Option("diagnostics/umap_latents.html"),
     batch_size: int = typer.Option(64),
     n_neighbors: int = typer.Option(30),
     min_dist: float = typer.Option(0.1)
 ):
     """
-    UMAP latent visualization from V50 encoder. Saves to .npy/.png/.html
+    UMAP latent visualization from V50 encoder.
     """
     cmd = [
         "python", "plot_umap_v50.py",
@@ -58,7 +59,7 @@ def umap_latent_plot(
         "--n_neighbors", str(n_neighbors),
         "--min_dist", str(min_dist)
     ]
-    print("🚀 Running UMAP latent projection...")
+    print("🚀 Running latent UMAP...")
     subprocess.run(cmd, check=True)
 
 
@@ -80,6 +81,22 @@ def score_gll(
 ):
     from evaluate_gll_v50 import evaluate_and_log_gll
     evaluate_and_log_gll(labels, preds, json_log_path=json, tag=tag)
+
+
+@app.command("dashboard")
+def full_dashboard():
+    """
+    Builds a full diagnostics report (UMAP + GLL + violations + summary).
+    """
+    print("📊 Running diagnostic summary...")
+    run_diagnostic_summary()
+
+    print("📐 Plotting latent UMAP...")
+    umap_latent_plot()
+
+    print("🌐 Generating HTML dashboard...")
+    from generate_html_report import generate_html_report
+    generate_html_report()
 
 
 if __name__ == "__main__":
