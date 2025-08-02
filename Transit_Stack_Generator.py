@@ -1,17 +1,20 @@
 """
-SpectraMind V50 – Transit Stack Generator (Ultimate Version)
-------------------------------------------------------------
-Simulates multiple noisy transit light curves and returns their average stack.
+SpectraMind V50 – Transit Stack Generator (Fully Loaded Version)
+---------------------------------------------------------------
+Simulates multiple noisy transit light curves and returns the average or full stack.
 Integrates with:
 - simulate_lightcurve_from_mu.py
-- fgs1_mamba.py (pretrain signal injection)
-- diagnostic visualizations (FFT, symbolic overlays)
-- plot_umap_v50.py (latent visual trace validation)
+- fgs1_mamba.py (pretrain injection)
+- symbolic_loss.py (smoothness, monotonicity eval)
+- plot_fft_power_cluster_compare.py
+- generate_html_report.py (summary + PNG export)
+- CLI: spectramind simulate-transit
 """
 
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import json
 from typing import Tuple, Optional
 
 
@@ -21,16 +24,11 @@ def generate_single_transit(
     duration: float = 0.1,
     sigma: float = 0.0005,
     baseline: float = 1.0,
-    random_phase: bool = False
+    random_phase: bool = True
 ) -> np.ndarray:
     time = np.linspace(0, 1, T)
     flux = np.ones(T) * baseline
-
-    if random_phase:
-        center = np.random.uniform(0.4, 0.6)
-    else:
-        center = 0.5
-
+    center = np.random.uniform(0.4, 0.6) if random_phase else 0.5
     in_transit = np.abs(time - center) < (duration / 2)
     flux[in_transit] -= depth
     return flux + np.random.normal(0, sigma, size=T)
@@ -49,13 +47,16 @@ def stack_transits(
         generate_single_transit(T, depth, duration, sigma, random_phase=random_phase)
         for _ in range(n)
     ])
-    return (stack if return_all else stack.mean(axis=0))
+    return stack if return_all else stack.mean(axis=0)
 
 
 def plot_stacked_transit(
     stacked: np.ndarray,
     save_path: str = "diagnostics/stacked_transit.png",
-    title: str = "Stacked Transit Light Curve"
+    title: str = "Stacked Transit Light Curve",
+    save_npy: Optional[str] = None,
+    save_json: Optional[str] = None,
+    save_fft: Optional[str] = None
 ):
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     plt.figure(figsize=(10, 3))
@@ -64,9 +65,9 @@ def plot_stacked_transit(
         for i in range(stacked.shape[0]):
             plt.plot(stacked[i], color="gray", alpha=0.3)
         mean_curve = stacked.mean(axis=0)
-        plt.plot(mean_curve, color="black", label="Mean")
+        plt.plot(mean_curve, color="black", lw=2, label="Mean")
     else:
-        plt.plot(stacked, color="black")
+        plt.plot(stacked, color="black", lw=2)
 
     plt.title(title)
     plt.xlabel("Time Steps")
@@ -76,7 +77,33 @@ def plot_stacked_transit(
     plt.savefig(save_path)
     print(f"✅ Saved stacked transit plot: {save_path}")
 
+    if save_npy:
+        np.save(save_npy, stacked)
+        print(f"💾 Saved stacked transit .npy: {save_npy}")
+
+    if save_json and stacked.ndim == 1:
+        with open(save_json, "w") as f:
+            json.dump({"mean_flux": stacked.tolist()}, f)
+        print(f"📝 Saved transit JSON summary: {save_json}")
+
+    if save_fft and stacked.ndim == 1:
+        fft = np.abs(np.fft.rfft(stacked))
+        plt.figure(figsize=(8, 3))
+        plt.plot(fft, color="purple")
+        plt.title("FFT Power of Stacked Transit")
+        plt.xlabel("Frequency Bin")
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig(save_fft)
+        print(f"🔬 Saved FFT of stacked transit: {save_fft}")
+
 
 if __name__ == "__main__":
-    stacked = stack_transits(n=10, T=1000, depth=0.002, sigma=0.0007)
-    plot_stacked_transit(stacked)
+    stacked = stack_transits(n=10, T=1200, depth=0.002, sigma=0.0007)
+    plot_stacked_transit(
+        stacked,
+        save_path="diagnostics/stacked_transit.png",
+        save_npy="diagnostics/stacked_transit.npy",
+        save_json="diagnostics/stacked_transit.json",
+        save_fft="diagnostics/stacked_transit_fft.png"
+    )
