@@ -1,78 +1,86 @@
 """
-SpectraMind V50 – CLI Diagnostics Suite
-----------------------------------------
-Runs violation overlays, SHAP diagnostics, and gallery renderings.
+SpectraMind V50 – Diagnostic CLI
+--------------------------------
+Run various diagnostics: GLL overlays, FFT maps, symbolic violations, latent UMAP, SHAP overlays, etc.
 """
 
 import typer
-import numpy as np
 from pathlib import Path
-from typing import Optional
-from constraint_violation_overlay import batch_violation_overlay
-from overlay_gallery import overlay_gallery
+import subprocess
 
-app = typer.Typer(help="SpectraMind V50 – Diagnostic Tools CLI")
+app = typer.Typer(help="SpectraMind V50 – Diagnostics CLI")
 
-
-@app.command("overlay-batch")
-def overlay_batch(
-    mu_path: Path = typer.Option(..., help="Path to .npy file of μ values (N, 283)"),
-    violation_path: Path = typer.Option(..., help="Path to .npy file of symbolic violations (N, 283)"),
-    planet_ids_path: Path = typer.Option(..., help="Path to .txt or .npy file of planet IDs (N,)"),
-    shap_path: Optional[Path] = typer.Option(None, help="Optional SHAP array (N, 283)"),
-    outdir: Path = typer.Option("outputs/diagnostics/planet_overlays", help="Output directory for plot files"),
-    normalize: bool = typer.Option(False, help="Normalize violations and SHAP relative to μ"),
-    save_csv: bool = typer.Option(True, help="Save .csv files with overlay values")
+@app.command("summary")
+def run_diagnostic_summary(
+    mu_path: str = "outputs/mu.pt",
+    sigma_path: str = "outputs/sigma.pt",
+    y_path: str = "outputs/y.pt",
+    shap_path: str = None,
+    entropy_path: str = None,
+    violations_path: str = None
 ):
-    """
-    Batch overlay of μ + symbolic violations (and SHAP) across all planets.
-    """
-    typer.echo(f"📂 Loading: μ → {mu_path}, violations → {violation_path}, IDs → {planet_ids_path}")
-    mu = np.load(mu_path)
-    vio = np.load(violation_path)
-    shap = np.load(shap_path) if shap_path else None
+    import torch
+    import numpy as np
+    from generate_diagnostic_summary import generate_diagnostic_summary
 
-    if planet_ids_path.suffix == ".npy":
-        ids = np.load(planet_ids_path).tolist()
-    else:
-        with open(planet_ids_path) as f:
-            ids = [line.strip() for line in f if line.strip()]
+    mu = torch.load(mu_path).numpy()
+    sigma = torch.load(sigma_path).numpy()
+    y = torch.load(y_path).numpy()
+    shap = torch.load(shap_path).numpy() if shap_path else None
+    entropy = torch.load(entropy_path).numpy() if entropy_path else None
+    violations = torch.load(violations_path).numpy() if violations_path else None
 
-    if len(ids) != len(mu):
-        raise ValueError(f"❌ Mismatch: {len(ids)} planet IDs vs {len(mu)} μ rows.")
-
-    batch_violation_overlay(
-        mu_matrix=mu,
-        violation_matrix=vio,
-        planet_ids=ids,
-        shap_matrix=shap,
-        outdir=str(outdir),
-        normalize=normalize,
-        save_csv=save_csv
-    )
+    generate_diagnostic_summary(mu, sigma, y, shap, entropy, violations)
 
 
-@app.command("gallery")
-def generate_gallery(
-    overlay_dir: Path = typer.Option("outputs/diagnostics/planet_overlays", help="Directory containing *_violation_overlay.png"),
-    save_path: Path = typer.Option("outputs/diagnostics/overlay_gallery.png", help="Output file for mosaic"),
-    grid_cols: int = typer.Option(3, help="Columns in mosaic"),
-    max_images: int = typer.Option(12, help="Max tiles to include"),
-    image_width: float = typer.Option(4.0, help="Single plot width"),
-    image_height: float = typer.Option(3.0, help="Single plot height")
+@app.command("umap-latents")
+def umap_latent_plot(
+    config: str = typer.Option("configs/config_v50.yaml", help="Path to config YAML"),
+    checkpoint: str = typer.Option("outputs/model.pt", help="Path to model checkpoint"),
+    tag: str = typer.Option("v50", help="Tag for saving latents"),
+    out_png: str = typer.Option("diagnostics/umap_latents.png", help="Static PNG output"),
+    out_html: str = typer.Option("diagnostics/umap_latents.html", help="Interactive HTML output"),
+    batch_size: int = typer.Option(64),
+    n_neighbors: int = typer.Option(30),
+    min_dist: float = typer.Option(0.1)
 ):
-    """
-    Render a mosaic of individual planet overlay plots.
-    """
-    typer.echo(f"🧩 Rendering gallery from: {overlay_dir}")
-    overlay_gallery(
-        overlay_dir=str(overlay_dir),
-        save_path=str(save_path),
-        grid_cols=grid_cols,
-        max_images=max_images,
-        image_size=(image_width, image_height)
-    )
+    """
+    UMAP latent visualization from V50 encoder. Saves to .npy/.png/.html
+    """
+    cmd = [
+        "python", "plot_umap_v50.py",
+        "--config", config,
+        "--checkpoint", checkpoint,
+        "--tag", tag,
+        "--out_png", out_png,
+        "--out_html", out_html,
+        "--batch_size", str(batch_size),
+        "--n_neighbors", str(n_neighbors),
+        "--min_dist", str(min_dist)
+    ]
+    print("🚀 Running UMAP latent projection...")
+    subprocess.run(cmd, check=True)
+
+
+@app.command("validate-submission")
+def validate_sub(
+    submission: str = "submission.csv",
+    gll_eval: bool = True
+):
+    from submission_validator_v50 import validate_submission
+    validate_submission(submission, gll_eval=gll_eval)
+
+
+@app.command("score-gll")
+def score_gll(
+    labels: str = "data/train.csv",
+    preds: str = "submission.csv",
+    json: str = "diagnostics/gll_score_submission.json",
+    tag: str = "submission"
+):
+    from evaluate_gll_v50 import evaluate_and_log_gll
+    evaluate_and_log_gll(labels, preds, json_log_path=json, tag=tag)
 
 
 if __name__ == "__main__":
-    app()
+    app()
