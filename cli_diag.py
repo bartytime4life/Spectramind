@@ -1,8 +1,7 @@
 """
 SpectraMind V50 – Diagnostic CLI
 --------------------------------
-Run all QA tools: UMAP latents, symbolic overlays, GLL scoring, submission validation,
-and render a full HTML diagnostics dashboard.
+Run symbolic overlays, latent projections, scoring checks, and full diagnostics dashboard generation.
 """
 
 import typer
@@ -10,10 +9,10 @@ import subprocess
 from pathlib import Path
 import re
 import webbrowser
-from generate_html_report import generate_html_report
 from submission_validator_v50 import validate_submission
 from evaluate_gll_v50 import evaluate_and_log_gll
 from generate_diagnostic_summary import generate_diagnostic_summary
+from generate_html_report import generate_html_report
 
 app = typer.Typer(help="SpectraMind V50 – Diagnostics CLI")
 
@@ -27,6 +26,9 @@ def run_diagnostic_summary(
     entropy_path: str = None,
     violations_path: str = None
 ):
+    """
+    Run symbolic and statistical QA over mu/sigma/y/shap and generate diagnostic_summary.json.
+    """
     import torch
     mu = torch.load(mu_path).numpy()
     sigma = torch.load(sigma_path).numpy()
@@ -34,7 +36,6 @@ def run_diagnostic_summary(
     shap = torch.load(shap_path).numpy() if shap_path else None
     entropy = torch.load(entropy_path).numpy() if entropy_path else None
     violations = torch.load(violations_path).numpy() if violations_path else None
-
     generate_diagnostic_summary(mu, sigma, y, shap, entropy, violations)
 
 
@@ -46,13 +47,13 @@ def umap_latent_plot(
     out_png: str = typer.Option("diagnostics/umap_latents.png"),
     out_html: str = typer.Option("diagnostics/umap_latents.html"),
     overlay_csv: str = typer.Option(None, help="Optional .csv with planet_id and label"),
-    overlay_column: str = typer.Option("symbolic_class", help="Label column to color by"),
+    overlay_column: str = typer.Option("symbolic_class", help="Column to use for color overlay"),
     batch_size: int = 64,
     n_neighbors: int = 30,
     min_dist: float = 0.1
 ):
     """
-    Generate UMAP plot from V50 latent space. Overlay symbolic/cluster labels if provided.
+    Generate UMAP of latent space from encoder. Supports symbolic overlays from CSV.
     """
     cmd = [
         "python", "plot_umap_v50.py",
@@ -67,7 +68,6 @@ def umap_latent_plot(
     ]
     if overlay_csv:
         cmd += ["--overlay_csv", overlay_csv, "--overlay_column", overlay_column]
-
     print("📐 Running UMAP latent visualizer...")
     subprocess.run(cmd, check=True)
 
@@ -78,7 +78,7 @@ def validate_sub(
     gll_eval: bool = True
 ):
     """
-    Validate submission format and optionally compute GLL score.
+    Validate submission.csv for column correctness, NaNs, duplicate planet_ids, and optional GLL scoring.
     """
     validate_submission(submission, gll_eval=gll_eval)
 
@@ -91,7 +91,7 @@ def score_gll(
     tag: str = "submission"
 ):
     """
-    Compute GLL score between predictions and ground truth.
+    Score predictions against ground truth using bin-weighted GLL.
     """
     evaluate_and_log_gll(labels, preds, json_log_path=json, tag=tag)
 
@@ -99,18 +99,22 @@ def score_gll(
 @app.command("dashboard")
 def full_dashboard(
     open_browser: bool = typer.Option(True, help="Open HTML in browser after generation"),
-    versioned: bool = typer.Option(True, help="Use versioned filenames like diagnostic_report_v2.html")
+    versioned: bool = typer.Option(True, help="Use versioned filenames like diagnostic_report_v2.html"),
+    overlay_csv: str = typer.Option(None, help="CSV for overlay (e.g., symbolic_clusters.csv)"),
+    overlay_column: str = typer.Option("symbolic_class", help="Column to use from overlay CSV")
 ):
     """
-    Build and render full diagnostics dashboard: UMAP + GLL + violations + HTML report.
+    Build and render the full HTML diagnostics dashboard.
     """
-    print("📊 Running symbolic/GLL diagnostics...")
+    print("📊 Running summary diagnostics...")
     run_diagnostic_summary()
 
-    print("📐 Generating UMAP latent plots...")
-    umap_latent_plot()
+    print("📐 Plotting latent UMAP...")
+    umap_latent_plot(
+        overlay_csv=overlay_csv if overlay_csv else None,
+        overlay_column=overlay_column
+    )
 
-    # Versioned HTML file
     diagnostics_dir = Path("diagnostics")
     if versioned:
         existing = list(diagnostics_dir.glob("diagnostic_report_v*.html"))
@@ -120,14 +124,14 @@ def full_dashboard(
     else:
         out_path = diagnostics_dir / "diagnostic_report.html"
 
-    print(f"🌐 Generating HTML dashboard: {out_path}")
+    print(f"🌐 Generating HTML dashboard to {out_path}")
     generate_html_report(out_path=out_path)
 
     if open_browser:
-        print("🧭 Opening dashboard in browser...")
+        print("🧭 Opening browser...")
         webbrowser.open(out_path.resolve().as_uri())
 
-    print(f"✅ Dashboard saved: {out_path}")
+    print(f"✅ Dashboard ready: {out_path}")
 
 
 if __name__ == "__main__":
