@@ -1,7 +1,7 @@
 """
 SpectraMind V50 – Diagnostic CLI
 --------------------------------
-Run symbolic overlays, UMAP/t-SNE projections, scoring checks, and generate full diagnostics dashboard.
+Run symbolic overlays, UMAP/t-SNE projections, scoring checks, and full diagnostics dashboard generation.
 """
 
 import typer
@@ -15,7 +15,6 @@ from generate_diagnostic_summary import generate_diagnostic_summary
 from generate_html_report import generate_html_report
 
 app = typer.Typer(help="SpectraMind V50 – Diagnostics CLI")
-
 
 @app.command("summary")
 def run_diagnostic_summary(
@@ -38,13 +37,13 @@ def run_diagnostic_summary(
 
 @app.command("umap-latents")
 def umap_latent_plot(
-    config: str = typer.Option("configs/config_v50.yaml"),
-    checkpoint: str = typer.Option("outputs/model.pt"),
-    tag: str = typer.Option("v50"),
-    out_png: str = typer.Option("diagnostics/umap_latents.png"),
-    out_html: str = typer.Option("diagnostics/umap_latents.html"),
-    overlay_csv: str = typer.Option(None, help="Optional .csv with planet_id and label"),
-    overlay_column: str = typer.Option("symbolic_class", help="Column to use for color overlay"),
+    config: str = "configs/config_v50.yaml",
+    checkpoint: str = "outputs/model.pt",
+    tag: str = "v50",
+    out_png: str = "diagnostics/umap_latents.png",
+    out_html: str = "diagnostics/umap_latents.html",
+    overlay_csv: str = None,
+    overlay_column: str = "symbolic_class",
     batch_size: int = 64,
     n_neighbors: int = 30,
     min_dist: float = 0.1
@@ -62,17 +61,16 @@ def umap_latent_plot(
     ]
     if overlay_csv:
         cmd += ["--overlay_csv", overlay_csv, "--overlay_column", overlay_column]
-    print("📐 Running UMAP latent visualizer...")
     subprocess.run(cmd, check=True)
 
 
 @app.command("tsne-latents")
 def tsne_latent_plot(
-    config: str = typer.Option("configs/config_v50.yaml"),
-    checkpoint: str = typer.Option("outputs/model.pt"),
-    html_out: str = typer.Option("diagnostics/tsne_latents.html"),
-    overlay_csv: str = typer.Option(None),
-    overlay_column: str = typer.Option("symbolic_class")
+    config: str = "configs/config_v50.yaml",
+    checkpoint: str = "outputs/model.pt",
+    html_out: str = "diagnostics/tsne_latents.html",
+    overlay_csv: str = None,
+    overlay_column: str = "symbolic_class"
 ):
     cmd = [
         "python", "plot_tsne_interactive.py",
@@ -83,7 +81,6 @@ def tsne_latent_plot(
     ]
     if overlay_csv:
         cmd += ["--overlay_csv", overlay_csv]
-    print("📐 Running t-SNE latent visualizer...")
     subprocess.run(cmd, check=True)
 
 
@@ -107,25 +104,29 @@ def score_gll(
 
 @app.command("dashboard")
 def full_dashboard(
-    open_browser: bool = typer.Option(True, help="Open HTML in browser after generation"),
-    versioned: bool = typer.Option(True, help="Use versioned filenames like diagnostic_report_v2.html"),
-    overlay_csv: str = typer.Option(None, help="CSV for overlay (e.g., symbolic_clusters.csv)"),
-    overlay_column: str = typer.Option("symbolic_class", help="Column to use from overlay CSV")
+    open_browser: bool = typer.Option(True),
+    versioned: bool = typer.Option(True),
+    overlay_csv: str = typer.Option(None),
+    overlay_column: str = typer.Option("symbolic_class"),
+    no_umap: bool = typer.Option(False, help="Skip UMAP projection"),
+    no_tsne: bool = typer.Option(False, help="Skip t-SNE projection")
 ):
     print("📊 Running summary diagnostics...")
     run_diagnostic_summary()
 
-    print("📐 Plotting UMAP...")
-    umap_latent_plot(
-        overlay_csv=overlay_csv if overlay_csv else None,
-        overlay_column=overlay_column
-    )
+    if not no_umap:
+        print("📐 Plotting UMAP...")
+        umap_latent_plot(
+            overlay_csv=overlay_csv,
+            overlay_column=overlay_column
+        )
 
-    print("📐 Plotting t-SNE...")
-    tsne_latent_plot(
-        overlay_csv=overlay_csv if overlay_csv else None,
-        overlay_column=overlay_column
-    )
+    if not no_tsne:
+        print("📐 Plotting t-SNE...")
+        tsne_latent_plot(
+            overlay_csv=overlay_csv,
+            overlay_column=overlay_column
+        )
 
     diagnostics_dir = Path("diagnostics")
     if versioned:
@@ -140,7 +141,6 @@ def full_dashboard(
     generate_html_report(out_path=out_path)
 
     if open_browser:
-        print("🧭 Opening browser...")
         webbrowser.open(out_path.resolve().as_uri())
 
     print(f"✅ Dashboard ready: {out_path}")
