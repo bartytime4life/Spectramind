@@ -1,13 +1,13 @@
 """
 SpectraMind V50 – Unified CLI Interface
 ---------------------------------------
-Main command-line interface for:
-- Training and inference
-- Diagnostics and dashboard generation
-- Submission orchestration
-- System health self-testing
-
-Logs version + config hash on every CLI call.
+Main CLI for:
+• Training and inference
+• Diagnostics and dashboards
+• Submission orchestration
+• System self-test + logging
+• CLI call history inspection (exportable)
+• Dummy test data generation
 """
 
 import typer
@@ -15,13 +15,14 @@ from pathlib import Path
 from datetime import datetime
 import json
 import sys
+import csv
 
 from cli_core_v50 import app as core_app
 from cli_diagnose import app as diagnose_app
 from cli_submit import app as submit_app
 from selftest import app as test_app
 
-app = typer.Typer(help="SpectraMind V50 – Unified CLI for scientific modeling and submission")
+app = typer.Typer(help="SpectraMind V50 – Unified CLI for training, submission, diagnostics")
 
 # Constants
 __VERSION__ = "v50.1.0"
@@ -74,8 +75,12 @@ def completion(shell: str = typer.Option("bash", help="Shell type: bash, zsh, fi
     typer.echo(f"source <({command.name} --show-completion {shell})")
 
 @app.command("analyze-log")
-def analyze_log(limit: int = typer.Option(10, help="Max entries to show from debug log")):
-    """Parse recent CLI calls from v50_debug_log.md and display as Markdown table"""
+def analyze_log(
+    limit: int = typer.Option(10, help="Max entries to show from debug log"),
+    out_csv: Path = typer.Option(None, help="Optional path to write CSV output"),
+    out_md: Path = typer.Option(None, help="Optional path to write Markdown output")
+):
+    """Parse recent CLI calls from v50_debug_log.md and display/export"""
     if not __LOG_FILE__.exists():
         typer.secho("❌ No log file found.", fg=typer.colors.RED)
         raise typer.Exit(code=1)
@@ -97,16 +102,47 @@ def analyze_log(limit: int = typer.Option(10, help="Max entries to show from deb
             current["version"] = line.strip().split(": ")[1]
         elif line.startswith("- Config Hash:"):
             current["hash"] = line.strip().split(": ")[1]
-
     if current:
         entries.append(current)
 
     entries = sorted(entries, key=lambda x: x["time"], reverse=True)[:limit]
 
-    typer.echo("| Time (UTC)           | Command                                | Version  | Config Hash       |")
-    typer.echo("|----------------------|-----------------------------------------|----------|-------------------|")
+    # Markdown output
+    header = "| Time (UTC)           | Command                                | Version  | Config Hash       |"
+    divider = "|----------------------|-----------------------------------------|----------|-------------------|"
+    typer.echo(header)
+    typer.echo(divider)
+    markdown_lines = [header, divider]
+
     for e in entries:
-        typer.echo(f"| {e['time'][:19]} | {e['command'][:41]:<41} | {e['version']} | {e['hash'][:15]}... |")
+        row = f"| {e['time'][:19]} | {e['command'][:41]:<41} | {e['version']} | {e['hash'][:15]}... |"
+        typer.echo(row)
+        markdown_lines.append(row)
+
+    # Optional .md output
+    if out_md:
+        out_md.parent.mkdir(exist_ok=True, parents=True)
+        out_md.write_text("\n".join(markdown_lines))
+        typer.echo(f"📄 Markdown written to: {out_md}")
+
+    # Optional .csv output
+    if out_csv:
+        out_csv.parent.mkdir(exist_ok=True, parents=True)
+        with open(out_csv, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["time", "command", "version", "config_hash"])
+            for e in entries:
+                writer.writerow([e["time"], e["command"], e["version"], e["hash"]])
+        typer.echo(f"📊 CSV written to: {out_csv}")
+
+@app.command("generate-dummy-data")
+def generate_dummy_data():
+    """Generate dummy μ, σ, y, COREL model, edge_index, and symbolic overlays."""
+    try:
+        import generate_dummy_v50_test_data
+        typer.secho("✅ Dummy V50 test data successfully generated.", fg=typer.colors.GREEN)
+    except Exception as e:
+        typer.secho(f"❌ Failed to generate dummy data: {e}", fg=typer.colors.RED)
 
 if __name__ == "__main__":
     app()
