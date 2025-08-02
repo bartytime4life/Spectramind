@@ -6,7 +6,7 @@ Main CLI for:
 • Diagnostics and dashboards
 • Submission orchestration
 • System self-test + logging
-• CLI call history inspection (exportable)
+• CLI call history analysis with grouped exports
 • Dummy test data generation
 """
 
@@ -16,6 +16,7 @@ from datetime import datetime
 import json
 import sys
 import csv
+from collections import defaultdict
 
 from cli_core_v50 import app as core_app
 from cli_diagnose import app as diagnose_app
@@ -76,14 +77,14 @@ def completion(shell: str = typer.Option("bash", help="Shell type: bash, zsh, fi
 
 @app.command("analyze-log")
 def analyze_log(
-    limit: int = typer.Option(10, help="Max entries to show from debug log"),
-    out_csv: Path = typer.Option(None, help="Optional path to write CSV output"),
-    out_md: Path = typer.Option(None, help="Optional path to write Markdown output")
+    limit: int = typer.Option(10, help="Max entries to show in terminal"),
+    out_csv: Path = typer.Option("diagnostics/cli_log.csv"),
+    out_md: Path = typer.Option("diagnostics/log_table.md")
 ):
-    """Parse recent CLI calls from v50_debug_log.md and display/export"""
+    """Parse CLI log into Markdown and CSV, grouped by config hash"""
     if not __LOG_FILE__.exists():
-        typer.secho("❌ No log file found.", fg=typer.colors.RED)
-        raise typer.Exit(code=1)
+        typer.secho("❌ No v50_debug_log.md found.", fg=typer.colors.RED)
+        raise typer.Exit()
 
     entries = []
     with open(__LOG_FILE__) as f:
@@ -105,35 +106,40 @@ def analyze_log(
     if current:
         entries.append(current)
 
-    entries = sorted(entries, key=lambda x: x["time"], reverse=True)[:limit]
+    # Sort by time descending
+    entries = sorted(entries, key=lambda x: x["time"], reverse=True)
 
-    # Markdown output
-    header = "| Time (UTC)           | Command                                | Version  | Config Hash       |"
-    divider = "|----------------------|-----------------------------------------|----------|-------------------|"
-    typer.echo(header)
-    typer.echo(divider)
-    markdown_lines = [header, divider]
+    # Terminal Markdown table preview
+    typer.echo("| Time (UTC)           | Command                                | Version  | Config Hash       |")
+    typer.echo("|----------------------|-----------------------------------------|----------|-------------------|")
+    for e in entries[:limit]:
+        typer.echo(f"| {e['time'][:19]} | {e['command'][:41]:<41} | {e['version']} | {e['hash'][:15]}... |")
 
+    # --- Export grouped Markdown ---
+    grouped = defaultdict(list)
     for e in entries:
-        row = f"| {e['time'][:19]} | {e['command'][:41]:<41} | {e['version']} | {e['hash'][:15]}... |"
-        typer.echo(row)
-        markdown_lines.append(row)
+        grouped[e["hash"]].append(e)
 
-    # Optional .md output
-    if out_md:
-        out_md.parent.mkdir(exist_ok=True, parents=True)
-        out_md.write_text("\n".join(markdown_lines))
-        typer.echo(f"📄 Markdown written to: {out_md}")
+    lines = []
+    for h, group in grouped.items():
+        lines.append(f"\n### Config Hash: `{h}`\n")
+        lines.append("| Time (UTC)           | Command                                | Version  |")
+        lines.append("|----------------------|-----------------------------------------|----------|")
+        for e in group:
+            lines.append(f"| {e['time'][:19]} | {e['command'][:41]:<41} | {e['version']} |")
 
-    # Optional .csv output
-    if out_csv:
-        out_csv.parent.mkdir(exist_ok=True, parents=True)
-        with open(out_csv, "w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(["time", "command", "version", "config_hash"])
-            for e in entries:
-                writer.writerow([e["time"], e["command"], e["version"], e["hash"]])
-        typer.echo(f"📊 CSV written to: {out_csv}")
+    out_md.parent.mkdir(parents=True, exist_ok=True)
+    out_md.write_text("\n".join(lines))
+    typer.echo(f"📄 Markdown log written to: {out_md}")
+
+    # --- CSV Export ---
+    out_csv.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_csv, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["time", "command", "version", "config_hash"])
+        for e in entries:
+            writer.writerow([e["time"], e["command"], e["version"], e["hash"]])
+    typer.echo(f"📊 CSV log written to: {out_csv}")
 
 @app.command("generate-dummy-data")
 def generate_dummy_data():
