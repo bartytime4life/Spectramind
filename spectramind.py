@@ -43,7 +43,10 @@ def log_cli_call():
     hash_val = get_latest_config_hash()
     now = datetime.utcnow().isoformat()
     entry = f"\n### CLI Call @ {now}\n- Command: `{cmd}`\n- Version: {__VERSION__}\n- Config Hash: {hash_val}\n"
-    __LOG_FILE__.write_text(__LOG_FILE__.read_text() + entry if __LOG_FILE__.exists() else entry)
+    if __LOG_FILE__.exists():
+        __LOG_FILE__.write_text(__LOG_FILE__.read_text() + entry)
+    else:
+        __LOG_FILE__.write_text(entry)
 
 @app.callback()
 def main(
@@ -69,6 +72,41 @@ def completion(shell: str = typer.Option("bash", help="Shell type: bash, zsh, fi
     command = get_command(app)
     typer.echo(f"# Add this to your shell config (e.g. ~/.bashrc)")
     typer.echo(f"source <({command.name} --show-completion {shell})")
+
+@app.command("analyze-log")
+def analyze_log(limit: int = typer.Option(10, help="Max entries to show from debug log")):
+    """Parse recent CLI calls from v50_debug_log.md and display as Markdown table"""
+    if not __LOG_FILE__.exists():
+        typer.secho("❌ No log file found.", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+
+    entries = []
+    with open(__LOG_FILE__) as f:
+        lines = f.readlines()
+
+    current = {}
+    for line in lines:
+        if line.startswith("### CLI Call @ "):
+            if current:
+                entries.append(current)
+                current = {}
+            current["time"] = line.strip().split("@ ")[1]
+        elif line.startswith("- Command: "):
+            current["command"] = line.strip().split("`")[1]
+        elif line.startswith("- Version:"):
+            current["version"] = line.strip().split(": ")[1]
+        elif line.startswith("- Config Hash:"):
+            current["hash"] = line.strip().split(": ")[1]
+
+    if current:
+        entries.append(current)
+
+    entries = sorted(entries, key=lambda x: x["time"], reverse=True)[:limit]
+
+    typer.echo("| Time (UTC)           | Command                                | Version  | Config Hash       |")
+    typer.echo("|----------------------|-----------------------------------------|----------|-------------------|")
+    for e in entries:
+        typer.echo(f"| {e['time'][:19]} | {e['command'][:41]:<41} | {e['version']} | {e['hash'][:15]}... |")
 
 if __name__ == "__main__":
     app()
