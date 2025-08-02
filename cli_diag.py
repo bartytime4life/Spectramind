@@ -1,7 +1,7 @@
 """
 SpectraMind V50 – Diagnostic CLI
 --------------------------------
-Run symbolic overlays, latent projections, scoring checks, and full diagnostics dashboard generation.
+Run symbolic overlays, UMAP/t-SNE projections, scoring checks, and generate full diagnostics dashboard.
 """
 
 import typer
@@ -26,9 +26,6 @@ def run_diagnostic_summary(
     entropy_path: str = None,
     violations_path: str = None
 ):
-    """
-    Run symbolic and statistical QA over mu/sigma/y/shap and generate diagnostic_summary.json.
-    """
     import torch
     mu = torch.load(mu_path).numpy()
     sigma = torch.load(sigma_path).numpy()
@@ -52,9 +49,6 @@ def umap_latent_plot(
     n_neighbors: int = 30,
     min_dist: float = 0.1
 ):
-    """
-    Generate UMAP of latent space from encoder. Supports symbolic overlays from CSV.
-    """
     cmd = [
         "python", "plot_umap_v50.py",
         "--config", config,
@@ -72,14 +66,32 @@ def umap_latent_plot(
     subprocess.run(cmd, check=True)
 
 
+@app.command("tsne-latents")
+def tsne_latent_plot(
+    config: str = typer.Option("configs/config_v50.yaml"),
+    checkpoint: str = typer.Option("outputs/model.pt"),
+    html_out: str = typer.Option("diagnostics/tsne_latents.html"),
+    overlay_csv: str = typer.Option(None),
+    overlay_column: str = typer.Option("symbolic_class")
+):
+    cmd = [
+        "python", "plot_tsne_interactive.py",
+        "--config", config,
+        "--checkpoint", checkpoint,
+        "--html_out", html_out,
+        "--overlay_column", overlay_column
+    ]
+    if overlay_csv:
+        cmd += ["--overlay_csv", overlay_csv]
+    print("📐 Running t-SNE latent visualizer...")
+    subprocess.run(cmd, check=True)
+
+
 @app.command("validate-submission")
 def validate_sub(
     submission: str = "submission.csv",
     gll_eval: bool = True
 ):
-    """
-    Validate submission.csv for column correctness, NaNs, duplicate planet_ids, and optional GLL scoring.
-    """
     validate_submission(submission, gll_eval=gll_eval)
 
 
@@ -90,9 +102,6 @@ def score_gll(
     json: str = "diagnostics/gll_score_submission.json",
     tag: str = "submission"
 ):
-    """
-    Score predictions against ground truth using bin-weighted GLL.
-    """
     evaluate_and_log_gll(labels, preds, json_log_path=json, tag=tag)
 
 
@@ -103,14 +112,17 @@ def full_dashboard(
     overlay_csv: str = typer.Option(None, help="CSV for overlay (e.g., symbolic_clusters.csv)"),
     overlay_column: str = typer.Option("symbolic_class", help="Column to use from overlay CSV")
 ):
-    """
-    Build and render the full HTML diagnostics dashboard.
-    """
     print("📊 Running summary diagnostics...")
     run_diagnostic_summary()
 
-    print("📐 Plotting latent UMAP...")
+    print("📐 Plotting UMAP...")
     umap_latent_plot(
+        overlay_csv=overlay_csv if overlay_csv else None,
+        overlay_column=overlay_column
+    )
+
+    print("📐 Plotting t-SNE...")
+    tsne_latent_plot(
         overlay_csv=overlay_csv if overlay_csv else None,
         overlay_column=overlay_column
     )
