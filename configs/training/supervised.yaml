@@ -1,0 +1,16 @@
+epochs: 40
+lr: 3e-4
+weight_decay: 0.05
+amp: true
+grad_accum: 1
+ema: false
+scheduler:
+  name: cosine
+  warmup_steps: 1000
+symbolic:
+  w_smooth: 1.0
+  w_nonneg: 1.0
+  w_asym: 0.2
+  w_band: 0.5
+save_every: 5
+log_every: 50
