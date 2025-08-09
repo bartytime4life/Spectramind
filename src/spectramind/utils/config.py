@@ -1,0 +1,92 @@
+# src/spectramind/utils/config.py
+from __future__ import annotations
+import os, json
+from pathlib import Path
+from typing import Dict, Optional
+import yaml
+
+LOG_FILE = Path("v50_debug_log.md")
+
+def _log(line: str) -> None:
+    LOG_FILE.write_text((LOG_FILE.read_text() if LOG_FILE.exists() else "") + line.rstrip() + "\n")
+
+def _is_kaggle() -> bool:
+    return bool(os.environ.get("KAGGLE_KERNEL_RUN_TYPE")) or Path("/kaggle/input").exists()
+
+def _probe_first(candidates) -> Optional[str]:
+    for p in candidates:
+        if p and Path(p).exists():
+            return str(Path(p).resolve())
+    return None
+
+def _read_yaml(p: Optional[str]) -> Dict:
+    if not p:
+        return {}
+    pp = Path(p)
+    if not pp.exists():
+        return {}
+    return yaml.safe_load(pp.read_text()) or {}
+
+def _merge(a: Dict, b: Dict) -> Dict:
+    out = dict(a)
+    for k, v in (b or {}).items():
+        if isinstance(v, dict) and isinstance(out.get(k), dict):
+            out[k] = _merge(out[k], v)
+        else:
+            out[k] = v
+    return out
+
+def resolve_data_config(
+    base_config: str = "configs/data/challenge.yaml",
+    override_config: Optional[str] = None,
+    env: Optional[str] = None,
+) -> Dict:
+    """
+    Resolution order:
+      1) base YAML (portable defaults)
+      2) auto env YAML (challenge.kaggle.yaml or challenge.local.yaml) if present
+      3) explicit override_config (CLI flag)
+      4) environment variables & auto-probed paths
+    """
+    cfg = _read_yaml(base_config)
+
+    effective_env = env or ("kaggle" if _is_kaggle() else "local")
+    auto_yaml = f"configs/data/challenge.{effective_env}.yaml"
+    cfg = _merge(cfg, _read_yaml(auto_yaml))
+    cfg = _merge(cfg, _read_yaml(override_config))
+
+    env_root = os.environ.get("SPECTRAMIND_DATA_ROOT", "")
+    env_fgs1 = os.environ.get("SPECTRAMIND_FGS1", "")
+    env_airs = os.environ.get("SPECTRAMIND_AIRS", "")
+    env_cal  = os.environ.get("SPECTRAMIND_CALIB", "")
+
+    kaggle_candidates = dict(
+        fgs1=[env_fgs1, f"{env_root}/raw/fgs1", "/kaggle/input/ariel-fgs1/raw/fgs1", "/kaggle/input/fgs1/raw/fgs1"],
+        airs=[env_airs, f"{env_root}/raw/airs_ch0", "/kaggle/input/ariel-airs-ch0/raw/airs_ch0", "/kaggle/input/airs/raw/airs_ch0"],
+        calibration=[env_cal, f"{env_root}/calibration", "/kaggle/input/ariel-calibration/calibration"],
+    )
+    local_candidates = dict(
+        fgs1=[env_fgs1, f"{env_root}/raw/fgs1", "data/challenge/raw/fgs1", "/data/ariel/raw/fgs1", str(Path.home() / "datasets/ariel/raw/fgs1")],
+        airs=[env_airs, f"{env_root}/raw/airs_ch0", "data/challenge/raw/airs_ch0", "/data/ariel/raw/airs_ch0", str(Path.home() / "datasets/ariel/raw/airs_ch0")],
+        calibration=[env_cal, f"{env_root}/calibration", "data/challenge/calibration", "/data/ariel/calibration", str(Path.home() / "datasets/ariel/calibration")],
+    )
+
+    probe = kaggle_candidates if _is_kaggle() else local_candidates
+    paths = cfg.setdefault("paths", {})
+    resolved = dict(
+        fgs1 = paths.get("fgs1") if paths.get("fgs1") and Path(paths["fgs1"]).exists() else _probe_first(probe["fgs1"]),
+        airs = paths.get("airs") if paths.get("airs") and Path(paths["airs"]).exists() else _probe_first(probe["airs"]),
+        calibration = paths.get("calibration") if paths.get("calibration") and Path(paths["calibration"]).exists() else _probe_first(probe["calibration"]),
+        metadata = paths.get("metadata", ""),
+        splits = paths.get("splits", ""),
+        cache = paths.get("cache", "data/cache" if not _is_kaggle() else "/kaggle/working/.cache"),
+    )
+    cfg["paths"].update({k: v for k, v in resolved.items() if v})
+
+    # absolutize
+    for k, v in list(cfg["paths"].items()):
+        if v:
+            cfg["paths"][k] = str(Path(v).resolve())
+
+    _log(f"[config] env={effective_env} kaggle={_is_kaggle()} resolved_paths=" + json.dumps(cfg["paths"]))
+    return cfg
