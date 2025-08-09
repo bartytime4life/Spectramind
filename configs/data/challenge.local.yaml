@@ -1,0 +1,27 @@
+dataset:
+  name: ariel_challenge
+  bins: 283
+
+paths:
+  # Adjust to your local folders if you prefer absolute paths.
+  # The resolver will also try common locations like ~/datasets/ariel/...
+  fgs1: data/challenge/raw/fgs1
+  airs: data/challenge/raw/airs_ch0
+  calibration: data/challenge/calibration
+  metadata: data/challenge/metadata
+  splits: data/challenge/splits.json
+  cache: data/cache
+
+loader:
+  batch_size: 8
+  num_workers: 8        # bump if you have CPU cores & RAM
+  pin_memory: true
+  persistent_workers: true
+  prefetch_factor: 4
+
+preprocess:
+  fgs1_len: 512
+  airs_width: 356
+  bin_to: 283
+  normalize: true
+  detrend: median
