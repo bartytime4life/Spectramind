@@ -1,0 +1,9 @@
+# configs/paths/v50.yaml
+# Common path anchors used across the pipeline
+
+artifacts_dir: "artifacts"
+checkpoints_dir: "${artifacts_dir}/checkpoints"
+corel_dir: "${artifacts_dir}/corel"
+diagnostics_dir: "diagnostics"
+reports_dir: "${diagnostics_dir}"
+calibration_dir: "data/challenge/calibration"
