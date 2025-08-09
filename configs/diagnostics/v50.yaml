@@ -1,0 +1,18 @@
+# configs/diagnostics/v50.yaml
+# Dashboard & metrics generation
+
+enable: true
+gll_heatmap: true
+fft_analysis: true
+zscore_analysis: true
+umap: true
+tsne: true
+symbolic_overlays: true
+shap_overlays: true
+attention_tracing: false
+html_report:
+  enabled: true
+  path: "diagnostics/diagnostic_report_v50.html"
+  open_browser: ${toggles.browser_open_reports}
+artifacts:
+  dir: "diagnostics"
