@@ -1,0 +1,12 @@
+# configs/logging/v50.yaml
+# Console/file logging + optional MLflow
+
+console_level: "INFO"
+file_level: "DEBUG"
+log_file: "v50_debug_log.md"
+
+mlflow:
+  enabled: false
+  tracking_uri: "file:./mlruns"
+  experiment: "SpectraMindV50"
+  run_name: "${project.tag}-${project.timestamp}"
