@@ -1,14 +1,13 @@
 # configs/config_v50.yaml
-# SpectraMind V50 – Main Hydra config (matches your repo layout)
+# SpectraMind V50 – Main Hydra config (fits your folder names)
 
 defaults:
-  - dataset: v50
+  - data: v50
   - model: v50
-  - train: v50
-  - predict: v50
+  - training: v50
   - diagnostics: v50
   - logging: v50
-  - reproducibility: v50
+  - repro: v50
   - paths: v50
   - _self_
 
