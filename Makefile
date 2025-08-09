@@ -1,20 +1,16 @@
-PYTHON=python
-CONFIG=configs/config_v50.yaml
+.PHONY: train predict dashboard selftest kaggle-export
 
-train-all:
-	$(PYTHON) src/spectramind/training/train_v50.py --config $(CONFIG)
+train:
+	python -m spectramind train --epochs 2 --lr 3e-4
 
 predict:
-	$(PYTHON) src/spectramind/inference/predict_v50.py --config $(CONFIG)
+	python -m spectramind predict --out-csv outputs/submission.csv
 
-make-submission:
-	$(PYTHON) scripts/generate_submission_package.py --config $(CONFIG)
+dashboard:
+	python -m spectramind dashboard --html outputs/diagnostics/diagnostic_report_v50.html
 
-diagnostics:
-	$(PYTHON) src/spectramind/diagnostics/generate_diagnostic_summary.py
+selftest:
+	python -m src.spectramind.cli.selftest
 
-leaderboard:
-	$(PYTHON) scripts/v50_pipeline_finalizer.py
-
-clean:
-	rm -rf outputs/* diagnostics/* *.zip *.pt *.npy
+kaggle-export:
+	zip -r outputs/kaggle_bundle.zip . -x "*.git*" -x "*.dvc*" -x "__pycache__/*"
