@@ -1,18 +1,41 @@
-paths:
-  outputs: outputs
-  diagnostics: diagnostics
+# conf/config_v50.yaml
+# SpectraMind V50 – Main Hydra config
+# -----------------------------------
+# This file wires together all sub-configs through Hydra's defaults stack.
+# Keep names stable; train_v50.py / predict_v50.py expect these keys.
 
-model:
-  latent_dim: 64
-  out_bins: 283
-  smooth_lambda: 0.1
-  nonneg_lambda: 0.05
+defaults:
+  # Config groups (each resolves to a file under conf/<group>/<name>.yaml)
+  - dataset: v50              # -> conf/dataset/v50.yaml (your dataset settings)
+  - model: v50                # -> conf/model/v50.yaml   (architecture + heads)
+  - train: v50                # -> conf/train/v50.yaml   (optimizer/schedule)
+  - predict: v50              # -> conf/predict/v50.yaml (inference/export)
+  - diagnostics: v50          # -> conf/diagnostics/v50.yaml (dashboards/plots)
+  - logging: v50              # -> conf/logging/v50.yaml (log dirs, MLflow)
+  - reproducibility: v50      # -> conf/repro/v50.yaml   (seeds, cudnn flags)
+  - paths: v50                # -> conf/paths/v50.yaml   (artifact/output dirs)
+  - _self_
 
-training:
-  epochs: 2
-  batch_size: 4
-  lr: 1e-4
-  seed: 42
+# Global metadata (available to all modules)
+project:
+  name: "SpectraMindV50"
+  tag: "default"
+  run_mode: "train"     # [train|predict|diagnose]
+  fold: 0               # if you use CV
+  timestamp: ${now:%Y-%m-%d_%H-%M-%S}
 
-calibration:
-  temperature: 1.0
+# Unified toggles (one-stop overrides without touching group files)
+toggles:
+  use_corel: true
+  use_symbolic_losses: true
+  save_intermediate_artifacts: true
+  browser_open_reports: false
+
+# Where to write outputs (Hydra manages working dir under this)
+hydra:
+  run:
+    dir: outputs/${project.name}/${project.tag}/${project.run_mode}/${project.timestamp}
+  sweep:
+    dir: sweeps/${project.name}/${project.tag}/${project.run_mode}/${project.timestamp}
+  job:
+    chdir: true
