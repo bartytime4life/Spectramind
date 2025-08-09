@@ -1,0 +1,18 @@
+paths:
+  outputs: outputs
+  diagnostics: diagnostics
+
+model:
+  latent_dim: 64
+  out_bins: 283
+  smooth_lambda: 0.1
+  nonneg_lambda: 0.05
+
+training:
+  epochs: 2
+  batch_size: 4
+  lr: 1e-4
+  seed: 42
+
+calibration:
+  temperature: 1.0

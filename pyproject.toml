@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spectramind-v50"
+version = "0.2.0"
+description = "Symbolically constrained, reproducible AI pipeline for the NeurIPS 2025 Ariel Data Challenge."
+authors = [{ name = "SpectraMind" }]
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.black]
+line-length = 100

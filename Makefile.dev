@@ -1,0 +1,16 @@
+PYTHON=python
+CONFIG=configs/config_v50.yaml
+FASTLOG=v50_debug_log.md
+
+fast-test:
+	$(PYTHON) src/spectramind/cli/selftest.py run --mode fast
+selftest:
+	$(PYTHON) src/spectramind/cli/selftest.py run --mode deep
+check-pipeline:
+	$(PYTHON) src/spectramind/cli/cli_v50.py check-pipeline
+
+gll-heatmap:
+	$(PYTHON) src/spectramind/diagnostics/plot_gll_heatmap_per_bin.py
+
+clean-outputs:
+	rm -rf outputs/* diagnostics/* *.zip *.pt *.npy

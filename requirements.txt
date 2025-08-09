@@ -1,0 +1,14 @@
+torch>=2.1
+torchvision
+torchaudio
+numpy
+pandas
+scipy
+matplotlib
+plotly
+typer[all]
+rich
+pyyaml
+hydra-core
+scikit-learn
+torch-geometric

@@ -1,0 +1,21 @@
+PYTHON=python
+CONFIG=configs/config_v50.yaml
+OUTPUTS=outputs
+DIAG=diagnostics
+
+all: train predict submission diagnostics leaderboard
+
+train:
+	$(PYTHON) src/spectramind/cli/cli_v50.py train-all --config $(CONFIG)
+
+predict:
+	$(PYTHON) src/spectramind/cli/cli_v50.py predict --config $(CONFIG)
+
+submission:
+	$(PYTHON) scripts/generate_submission_package.py --config $(CONFIG)
+
+diagnostics:
+	$(PYTHON) src/spectramind/cli/cli_v50.py diagnose-all
+
+leaderboard:
+	$(PYTHON) scripts/v50_pipeline_finalizer.py
