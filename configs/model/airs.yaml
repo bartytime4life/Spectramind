@@ -1,0 +1,6 @@
+name: airs_gnn
+d_model: 256
+depth: 4
+d_edge: 8
+d_hidden: 128
+out_bins: 283
