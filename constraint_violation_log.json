@@ -1,3 +1,26 @@
 {
-  "violations": []
+  "violations": [
+    {
+      "planet_id": "WASP-39b",
+      "rule": "Smoothness",
+      "bins": [102, 103, 104],
+      "severity": 0.045,
+      "tolerance": 0.02,
+      "source_module": "symbolic_loss.py",
+      "timestamp": "2025-08-09T22:35:00Z",
+      "auto_remediated": false,
+      "notes": "Second-derivative smoothness exceeded in CO2 band edge"
+    },
+    {
+      "planet_id": "HD-189733b",
+      "rule": "Spectral Nonnegativity",
+      "bins": [5],
+      "severity": -0.0008,
+      "tolerance": 0,
+      "source_module": "flow_uncertainty_head.py",
+      "timestamp": "2025-08-09T22:35:02Z",
+      "auto_remediated": true,
+      "notes": "Negative μ predicted; clamped in symbolic loss"
+    }
+  ]
 }
