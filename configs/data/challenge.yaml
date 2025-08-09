@@ -1,0 +1,7 @@
+# Paths intentionally blank; fill with your local/Kaggle mount points.
+fgs1_path: data/challenge/raw/fgs1
+airs_path: data/challenge/raw/airs_ch0
+calibration_dir: data/challenge/calibration
+bins: 283
+batch_size: 8
+num_workers: 4
