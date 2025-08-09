@@ -1,0 +1,12 @@
+# configs/repro/v50.yaml
+# Reproducibility controls
+
+seed: 42
+torch:
+  deterministic: true
+  cudnn_benchmark: false
+  allow_tf32: true
+numpy:
+  print_precision: 6
+hashing:
+  run_hash_file: "run_hash_summary_v50.json"
