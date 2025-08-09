@@ -1,0 +1,5 @@
+name: multiscale
+hidden_mu: 512
+hidden_sigma: 256
+out_bins: 283
+n_scales: 4
