@@ -6,6 +6,7 @@
 #
 # Kaggle presets:
 #   make kaggle-verify
+#   make kaggle-install
 #   make kaggle-train
 #   make kaggle-predict
 #
@@ -74,6 +75,7 @@ help:
 	@echo "  make train              Run training stub"
 	@echo "  make predict            Run inference stub"
 	@echo "  make kaggle-verify      Check Kaggle mount paths exist"
+	@echo "  make kaggle-install     Install pinned deps + PyG CUDA wheels on Kaggle"
 	@echo "  make kaggle-train       Train with Kaggle paths/epochs preset"
 	@echo "  make kaggle-predict     Predict with Kaggle paths/output preset"
 	@echo "  make cfg                Show active config path"
@@ -113,6 +115,25 @@ kaggle-verify:
 	@if [ -d "$(KAGGLE_AIRS)" ]; then echo "✅ AIRS: $(KAGGLE_AIRS) exists"; else echo "❌ Missing: $(KAGGLE_AIRS)"; fi
 	@if [ -d "$(KAGGLE_CAL)" ]; then echo "✅ CAL:  $(KAGGLE_CAL) exists"; else echo "❌ Missing: $(KAGGLE_CAL)"; fi
 	@echo "💡 Adjust paths with: make kaggle-verify KAGGLE_FGS1=/new/path"
+
+# --- Kaggle environment setup -----------------------------------------------
+.PHONY: kaggle-install
+kaggle-install:
+	$(call banner,Setting up Kaggle Python environment)
+	@if [ -f install_kaggle.sh ]; then \
+		chmod +x install_kaggle.sh; \
+		./install_kaggle.sh; \
+	else \
+		echo "install_kaggle.sh not found; running inline install instead..."; \
+		pip install -r requirements.txt --no-cache-dir; \
+		pip install --no-cache-dir \
+		  torch-scatter==2.1.2+pt21cu121 \
+		  torch-sparse==0.6.18+pt21cu121 \
+		  torch-cluster==1.6.3+pt21cu121 \
+		  torch-spline-conv==1.2.2+pt21cu121 \
+		  -f https://data.pyg.org/whl/torch-2.1.0+cu121.html; \
+	fi
+	@echo "✅ Kaggle environment ready."
 
 .PHONY: kaggle-train
 kaggle-train: kaggle-verify
