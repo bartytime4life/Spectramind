@@ -1,14 +1,102 @@
 [build-system]
-requires = ["setuptools>=65", "wheel"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "spectramind-v50"
-version = "0.2.0"
+version = "0.3.0"
 description = "Symbolically constrained, reproducible AI pipeline for the NeurIPS 2025 Ariel Data Challenge."
 authors = [{ name = "SpectraMind" }]
 requires-python = ">=3.10"
-dependencies = []
+
+# Keep core runtime light for Kaggle/Ubuntu; install torch separately as needed.
+dependencies = [
+  "typer>=0.12.3",
+  "PyYAML>=6.0.1",
+  "numpy>=1.26.0",
+  "pandas>=2.1.0",
+  "matplotlib>=3.8.0",
+  "plotly>=5.22.0"
+]
+
+# Optional extras (install with: pip install .[dev], .[diag])
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.5.0",
+  "black>=24.4.0",
+  "pytest>=8.2.0",
+  "pytest-cov>=5.0.0",
+  "mypy>=1.10.0",
+  "types-PyYAML"
+]
+diag = [
+  "umap-learn>=0.5.6",
+  "scikit-learn>=1.4.0",
+  "shap>=0.45.0"
+]
+
+# Console entry point (installs the CLI command `smv50`)
+[project.scripts]
+smv50 = "spectramind:app"
+
+# -------------------- Setuptools (src-layout + top-level module) --------------------
+
+[tool.setuptools]
+# We have both:
+#  - package code in src/spectramind/...
+#  - a top-level CLI module spectramind.py
+# The following tells setuptools to include both.
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["spectramind*"]
+
+# Also install the top-level CLI module file
+[tool.setuptools.py-modules]
+py-modules = ["spectramind"]
+
+# -------------------- Tooling --------------------
 
 [tool.black]
 line-length = 100
+target-version = ["py310"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+select = [
+  "E","F","W",          # pycodestyle / pyflakes
+  "I",                  # isort
+  "B",                  # flake8-bugbear
+  "UP"                  # pyupgrade
+]
+ignore = []
+exclude = [
+  "build",
+  ".venv",
+  "outputs",
+  ".git",
+]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["src/spectramind"]
+omit = ["**/__init__.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
