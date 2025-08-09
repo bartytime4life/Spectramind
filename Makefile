@@ -1,4 +1,4 @@
-# SpectraMind V50 – Quick Commands Makefile (with Kaggle presets + verify)
+# SpectraMind V50 – Quick Commands Makefile (with Kaggle presets + verify + bootstrap)
 # ------------------------------------------------------------------------
 # Run Hydra-powered stubs:
 #   python -m spectramind.training.train_v50
@@ -7,6 +7,7 @@
 # Kaggle presets:
 #   make kaggle-verify
 #   make kaggle-install
+#   make kaggle-bootstrap
 #   make kaggle-train
 #   make kaggle-predict
 #
@@ -76,6 +77,7 @@ help:
 	@echo "  make predict            Run inference stub"
 	@echo "  make kaggle-verify      Check Kaggle mount paths exist"
 	@echo "  make kaggle-install     Install pinned deps + PyG CUDA wheels on Kaggle"
+	@echo "  make kaggle-bootstrap   Full bootstrap: fetch repo → install → verify → train → predict"
 	@echo "  make kaggle-train       Train with Kaggle paths/epochs preset"
 	@echo "  make kaggle-predict     Predict with Kaggle paths/output preset"
 	@echo "  make cfg                Show active config path"
@@ -134,6 +136,16 @@ kaggle-install:
 		  -f https://data.pyg.org/whl/torch-2.1.0+cu121.html; \
 	fi
 	@echo "✅ Kaggle environment ready."
+
+.PHONY: kaggle-bootstrap
+kaggle-bootstrap:
+	$(call banner,Full Kaggle bootstrap: fetch repo → install deps → verify → train → predict)
+	@if [ ! -f kaggle/bootstrap_cell.sh ]; then \
+		echo "❌ kaggle/bootstrap_cell.sh not found. Please add it to your repo at kaggle/bootstrap_cell.sh"; \
+		exit 1; \
+	fi
+	chmod +x kaggle/bootstrap_cell.sh
+	./kaggle/bootstrap_cell.sh $(OVERRIDES)
 
 .PHONY: kaggle-train
 kaggle-train: kaggle-verify
