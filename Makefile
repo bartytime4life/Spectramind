@@ -1,17 +1,19 @@
-# SpectraMind V50 – Quick Commands Makefile
-# -----------------------------------------
-# Runs the Hydra-powered stubs:
-#   - python -m spectramind.training.train_v50
-#   - python -m spectramind.inference.predict_v50
+# SpectraMind V50 – Quick Commands Makefile (with Kaggle presets + verify)
+# ------------------------------------------------------------------------
+# Run Hydra-powered stubs:
+#   python -m spectramind.training.train_v50
+#   python -m spectramind.inference.predict_v50
 #
-# Pass Hydra overrides via OVERRIDES, e.g.:
-#   make train OVERRIDES='training.scheduler.max_epochs=3 data.fgs1_path=/kaggle/input/fgs1'
-#   make predict OVERRIDES='predict.export.submission_csv=outputs/submission.csv'
+# Kaggle presets:
+#   make kaggle-verify
+#   make kaggle-train
+#   make kaggle-predict
 #
-# Optional convenience variables you can set on the command line:
-#   PY=python3.11   (default: python3)
-#   CFG=configs/config_v50.yaml
-#   SRC=src
+# Pass Hydra overrides with:
+#   OVERRIDES='key=val key2=val'
+#
+# Override Kaggle mount paths or batch/epoch sizes inline:
+#   make kaggle-train KAGGLE_FGS1=/kaggle/input/my-fgs1 EPOCHS=3
 
 SHELL := /bin/bash
 .ONESHELL:
@@ -23,18 +25,38 @@ SRC           ?= src
 CFG           ?= configs/config_v50.yaml
 EXPORT_PYTHONPATH := $(abspath $(SRC))
 
-# Expose src/ as a package root
 export PYTHONPATH := $(EXPORT_PYTHONPATH)
-
-# Hydra verbosity (keep full tracebacks on)
 export HYDRA_FULL_ERROR := 1
 
-# Optional user-provided overrides (Hydra style: key=value key2=value2 ...)
 OVERRIDES ?=
 
-# --- Commands ----------------------------------------------------------------
 TRAIN_CMD := $(PY) -m spectramind.training.train_v50
 PRED_CMD  := $(PY) -m spectramind.inference.predict_v50
+
+# --- Kaggle Presets ----------------------------------------------------------
+KAGGLE_FGS1 ?= /kaggle/input/fgs1
+KAGGLE_AIRS ?= /kaggle/input/airs-ch0
+KAGGLE_CAL  ?= /kaggle/input/calibration
+
+KAGGLE_WORK ?= /kaggle/working
+KAGGLE_SUB  ?= $(KAGGLE_WORK)/submission.csv
+
+EPOCHS      ?= 5
+BATCH       ?= 8
+WORKERS     ?= 2
+
+KAGGLE_DATA_OVERRIDES = \
+  data.fgs1_path=$(KAGGLE_FGS1) \
+  data.airs_path=$(KAGGLE_AIRS) \
+  data.calibration_dir=$(KAGGLE_CAL) \
+  data.batch_size=$(BATCH) \
+  data.num_workers=$(WORKERS)
+
+KAGGLE_TRAIN_OVERRIDES = \
+  training.scheduler.max_epochs=$(EPOCHS)
+
+KAGGLE_PRED_OVERRIDES = \
+  predict.export.submission_csv=$(KAGGLE_SUB)
 
 # --- Helpers -----------------------------------------------------------------
 define banner
@@ -49,33 +71,60 @@ endef
 help:
 	@echo "SpectraMind V50 – Make targets"
 	@echo ""
-	@echo "  make train                Run training stub with Hydra config"
-	@echo "  make predict              Run inference stub and write submission.csv"
-	@echo "  make cfg                  Print the active root config path"
-	@echo "  make dirs                 Create common artifact directories"
-	@echo "  make clean                Remove typical build/cache folders"
+	@echo "  make train              Run training stub"
+	@echo "  make predict            Run inference stub"
+	@echo "  make kaggle-verify      Check Kaggle mount paths exist"
+	@echo "  make kaggle-train       Train with Kaggle paths/epochs preset"
+	@echo "  make kaggle-predict     Predict with Kaggle paths/output preset"
+	@echo "  make cfg                Show active config path"
+	@echo "  make dirs               Create artifact directories"
+	@echo "  make clean              Remove build/cache/temp outputs"
 	@echo ""
-	@echo "Overrides:"
-	@echo "  OVERRIDES='key=value key2=value2'  # Hydra overrides"
-	@echo "  PY=python3.11                       # choose Python"
-	@echo "  CFG=configs/config_v50.yaml         # choose config"
+	@echo "Variables:"
+	@echo "  OVERRIDES='key=val key2=val'"
+	@echo "  PY=python3.11"
+	@echo "  CFG=configs/config_v50.yaml"
 	@echo ""
-	@echo "Examples:"
-	@echo "  make train OVERRIDES='training.scheduler.max_epochs=3'"
-	@echo "  make predict OVERRIDES='predict.export.submission_csv=outputs/submission.csv'"
+	@echo "Kaggle defaults:"
+	@echo "  KAGGLE_FGS1=$(KAGGLE_FGS1)"
+	@echo "  KAGGLE_AIRS=$(KAGGLE_AIRS)"
+	@echo "  KAGGLE_CAL=$(KAGGLE_CAL)"
+	@echo "  KAGGLE_WORK=$(KAGGLE_WORK)"
+	@echo "  KAGGLE_SUB=$(KAGGLE_SUB)"
+	@echo "  EPOCHS=$(EPOCHS)  BATCH=$(BATCH)  WORKERS=$(WORKERS)"
 	@echo ""
 
 .PHONY: train
 train: dirs
-	$(call banner,Running TRAIN with $(PY) and $(CFG))
+	$(call banner,Running TRAIN)
 	test -f "$(CFG)" || { echo "Config not found: $(CFG)"; exit 1; }
 	$(TRAIN_CMD) $(OVERRIDES)
 
 .PHONY: predict
 predict: dirs
-	$(call banner,Running PREDICT with $(PY) and $(CFG))
+	$(call banner,Running PREDICT)
 	test -f "$(CFG)" || { echo "Config not found: $(CFG)"; exit 1; }
 	$(PRED_CMD) $(OVERRIDES)
+
+.PHONY: kaggle-verify
+kaggle-verify:
+	$(call banner,Verifying Kaggle mount paths)
+	@if [ -d "$(KAGGLE_FGS1)" ]; then echo "✅ FGS1: $(KAGGLE_FGS1) exists"; else echo "❌ Missing: $(KAGGLE_FGS1)"; fi
+	@if [ -d "$(KAGGLE_AIRS)" ]; then echo "✅ AIRS: $(KAGGLE_AIRS) exists"; else echo "❌ Missing: $(KAGGLE_AIRS)"; fi
+	@if [ -d "$(KAGGLE_CAL)" ]; then echo "✅ CAL:  $(KAGGLE_CAL) exists"; else echo "❌ Missing: $(KAGGLE_CAL)"; fi
+	@echo "💡 Adjust paths with: make kaggle-verify KAGGLE_FGS1=/new/path"
+
+.PHONY: kaggle-train
+kaggle-train: kaggle-verify
+	$(call banner,Kaggle TRAIN)
+	test -f "$(CFG)" || { echo "Config not found: $(CFG)"; exit 1; }
+	$(TRAIN_CMD) $(KAGGLE_DATA_OVERRIDES) $(KAGGLE_TRAIN_OVERRIDES) $(OVERRIDES)
+
+.PHONY: kaggle-predict
+kaggle-predict: kaggle-verify
+	$(call banner,Kaggle PREDICT)
+	test -f "$(CFG)" || { echo "Config not found: $(CFG)"; exit 1; }
+	$(PRED_CMD) $(KAGGLE_DATA_OVERRIDES) $(KAGGLE_PRED_OVERRIDES) $(OVERRIDES)
 
 .PHONY: cfg
 cfg:
