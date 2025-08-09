@@ -60,6 +60,10 @@ KAGGLE_TRAIN_OVERRIDES = \
 KAGGLE_PRED_OVERRIDES = \
   predict.export.submission_csv=$(KAGGLE_SUB)
 
+# --- Bootstrap script location (for auto-download fallback) -------------------
+BOOTSTRAP_PATH := kaggle/bootstrap_cell.sh
+BOOTSTRAP_URL  ?= https://raw.githubusercontent.com/bartytime4life/SpectraMind/main/$(BOOTSTRAP_PATH)
+
 # --- Helpers -----------------------------------------------------------------
 define banner
 	@echo "================================================================"
@@ -137,15 +141,27 @@ kaggle-install:
 	fi
 	@echo "✅ Kaggle environment ready."
 
+# --- Full Kaggle bootstrap ---------------------------------------------------
 .PHONY: kaggle-bootstrap
 kaggle-bootstrap:
 	$(call banner,Full Kaggle bootstrap: fetch repo → install deps → verify → train → predict)
-	@if [ ! -f kaggle/bootstrap_cell.sh ]; then \
-		echo "❌ kaggle/bootstrap_cell.sh not found. Please add it to your repo at kaggle/bootstrap_cell.sh"; \
-		exit 1; \
+	@if [ ! -f "$(BOOTSTRAP_PATH)" ]; then \
+		echo "⚠️  $(BOOTSTRAP_PATH) not found. Attempting auto-download..."; \
+		mkdir -p $(dir $(BOOTSTRAP_PATH)); \
+		if command -v curl >/dev/null 2>&1; then \
+			curl -fsSL "$(BOOTSTRAP_URL)" -o "$(BOOTSTRAP_PATH)" || true; \
+		elif command -v wget >/dev/null 2>&1; then \
+			wget -qO "$(BOOTSTRAP_PATH)" "$(BOOTSTRAP_URL)" || true; \
+		fi; \
+		if [ ! -s "$(BOOTSTRAP_PATH)" ]; then \
+			echo "❌ Failed to fetch $(BOOTSTRAP_URL). Ensure internet is enabled or include $(BOOTSTRAP_PATH) in the dataset."; \
+			exit 1; \
+		else \
+			echo "✅ Downloaded $(BOOTSTRAP_PATH)"; \
+		fi; \
 	fi
-	chmod +x kaggle/bootstrap_cell.sh
-	./kaggle/bootstrap_cell.sh $(OVERRIDES)
+	chmod +x "$(BOOTSTRAP_PATH)"
+	"./$(BOOTSTRAP_PATH)" $(OVERRIDES)
 
 .PHONY: kaggle-train
 kaggle-train: kaggle-verify
