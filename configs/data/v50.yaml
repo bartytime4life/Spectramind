@@ -1,0 +1,62 @@
+# configs/data/v50.yaml
+# SpectraMind V50 – Dataset configuration (challenge-ready)
+
+# === Raw Data Paths ===
+fgs1_path: data/challenge/raw/fgs1
+airs_path: data/challenge/raw/airs_ch0
+calibration_dir: data/challenge/calibration
+
+# === Dataset Shape ===
+bins: 283
+fgs1_frame_size: [32, 32]
+airs_frame_size: [32, 356]
+
+# === Loader Settings ===
+batch_size: 8
+num_workers: 4
+prefetch_factor: 2
+pin_memory: true
+persistent_workers: true
+shuffle: true
+
+# === Symbolic & Masking Options ===
+masking_strategy: "snr_block"       # [random, block, snr_block, molecule_region]
+mask_fraction: 0.25
+mask_block_size: 8
+mask_snr_threshold: 5.0
+mask_molecule_regions: true
+dual_view_masking: false
+
+# === Curriculum & Scheduling ===
+curriculum_mask_schedule:
+  - { epoch: 0,   mask_fraction: 0.35 }
+  - { epoch: 10,  mask_fraction: 0.25 }
+  - { epoch: 20,  mask_fraction: 0.15 }
+
+# === Calibration & Preprocessing ===
+apply_adc_correction: true
+apply_flat_field: true
+apply_dark_subtraction: true
+normalize_flux: true
+phase_align: true
+jitter_injection_std: 0.0025
+spectral_smoothing_target: 0.003
+
+# === Metadata Options ===
+include_metadata: true
+metadata_fields: ["orbital_phase", "airmass", "detector_temp", "scan_angle"]
+
+# === Diagnostics Hooks ===
+save_mask_visualizations: false
+save_snr_maps: false
+symbolic_profile_overlay: false
+fft_autocorr_overlay: false
+
+# === Reproducibility ===
+seed: 42
+deterministic: true
+benchmark: false
+
+# === Logging ===
+log_dataset_stats: true
+log_sample_ids: false
