@@ -2,14 +2,12 @@
 # spectramind.py — Unified CLI for SpectraMind V50
 # ------------------------------------------------
 # - Global flags: --dry-run, --confirm, --log, --version
-# - Auto-detects Kaggle vs Local and resolves data paths
-# - Logs all invocations to v50_debug_log.md
-# - Updates run_hash_summary_v50.json for reproducibility
-# - Routes to train / predict / diagnostics / submit / selftest
+# - Auto-detect Kaggle vs Local and resolve data paths
+# - Logs to v50_debug_log.md and updates run_hash_summary_v50.json
+# - Routes to: resolve-paths / train / predict / calibrate / diagnose / submit / selftest
 #
-# This file intentionally has *no* hardcoded paths. It defers to:
-#   configs/data/challenge.yaml  (+ optional challenge.local.yaml / challenge.kaggle.yaml)
-# and environment variables (SPECTRAMIND_*). See src/spectramind/utils/config.py
+# NOTE: If src/spectramind/utils/config.py exists, we import its resolver.
+#       Otherwise we fall back to the built-in lightweight resolver below.
 
 from __future__ import annotations
 
@@ -24,30 +22,17 @@ from typing import Any, Dict, Optional
 
 import typer
 
-# Optional deps (keep CLI resilient if not installed)
+# Optional dependency: torch (we avoid hard-failing on import to keep CLI usable)
 try:
     import torch  # type: ignore
 except Exception:  # pragma: no cover
     torch = None  # noqa: N816
 
+# Try to import the project-wide resolver; fallback provided if missing
 try:
-    from src.spectramind.utils.config import resolve_data_config
+    from src.spectramind.utils.config import resolve_data_config as _external_resolver  # type: ignore
 except Exception:
-    # Minimal fallback so CLI still runs; strongly recommend adding utils/config.py
-    def resolve_data_config(base_config: str = "configs/data/challenge.yaml",
-                            override_config: Optional[str] = None,
-                            env: Optional[str] = None) -> Dict[str, Any]:
-        return {
-            "dataset": {"name": "ariel_challenge", "bins": 283},
-            "paths": {
-                "fgs1": "data/challenge/raw/fgs1",
-                "airs": "data/challenge/raw/airs_ch0",
-                "calibration": "data/challenge/calibration",
-                "cache": "data/cache",
-            },
-            "loader": {"batch_size": 8, "num_workers": 4, "pin_memory": True},
-            "preprocess": {"fgs1_len": 512, "airs_width": 356, "bin_to": 283, "normalize": True},
-        }
+    _external_resolver = None
 
 APP_VERSION = "0.3.0"
 LOG_FILE = Path("v50_debug_log.md")
@@ -62,7 +47,9 @@ def _now() -> str:
 
 def _git_rev() -> str:
     try:
-        return subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL).decode().strip()
+        return subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL
+        ).decode().strip()
     except Exception:
         return "nogit"
 
@@ -80,8 +67,11 @@ def _update_run_hash(extra: Optional[Dict[str, Any]] = None) -> None:
         "git": _git_rev(),
     }
     if torch is not None:
-        info["torch"] = str(torch.__version__)
-        info["cuda_available"] = bool(torch.cuda.is_available())
+        try:
+            info["torch"] = str(torch.__version__)
+            info["cuda_available"] = bool(torch.cuda.is_available())
+        except Exception:
+            pass
     if extra:
         info.update(extra)
     RUN_HASH.write_text(json.dumps(info, indent=2))
@@ -91,10 +81,109 @@ def _echo_kv(title: str, d: Dict[str, Any]) -> None:
     for k, v in d.items():
         typer.echo(f"  {k}: {v}")
 
+def _maybe_confirm(what: str) -> None:
+    if not Ctx.confirm:
+        return
+    if not typer.confirm(f"Proceed to {what}?"):
+        raise typer.Exit(code=1)
+
 class Ctx:
     dry_run: bool = False
     confirm: bool = False
     log: bool = True
+
+# ----------------------- lightweight built-in resolver ------------------- #
+
+def _is_kaggle() -> bool:
+    return bool(os.environ.get("KAGGLE_KERNEL_RUN_TYPE")) or Path("/kaggle/input").exists()
+
+def _probe_first(candidates) -> Optional[str]:
+    for p in candidates:
+        if p and Path(p).exists():
+            return str(Path(p).resolve())
+    return None
+
+def _read_yaml(path: Optional[str]) -> Dict[str, Any]:
+    if not path:
+        return {}
+    pp = Path(path)
+    if not pp.exists():
+        return {}
+    try:
+        import yaml  # lazy import to keep CLI light if user didn't install
+    except Exception:
+        return {}
+    return (yaml.safe_load(pp.read_text()) or {})
+
+def _merge(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
+    out = dict(a)
+    for k, v in (b or {}).items():
+        if isinstance(v, dict) and isinstance(out.get(k), dict):
+            out[k] = _merge(out[k], v)
+        else:
+            out[k] = v
+    return out
+
+def _builtin_resolve_data_config(
+    base_config: str = "configs/data/challenge.yaml",
+    override_config: Optional[str] = None,
+    env: Optional[str] = None,
+) -> Dict[str, Any]:
+    cfg = _read_yaml(base_config)
+
+    effective_env = env or ("kaggle" if _is_kaggle() else "local")
+    auto_yaml = f"configs/data/challenge.{effective_env}.yaml"
+    cfg = _merge(cfg, _read_yaml(auto_yaml))
+    cfg = _merge(cfg, _read_yaml(override_config))
+
+    env_root = os.environ.get("SPECTRAMIND_DATA_ROOT", "")
+    env_fgs1 = os.environ.get("SPECTRAMIND_FGS1", "")
+    env_airs = os.environ.get("SPECTRAMIND_AIRS", "")
+    env_cal  = os.environ.get("SPECTRAMIND_CALIB", "")
+
+    kaggle_candidates = dict(
+        fgs1=[env_fgs1, f"{env_root}/raw/fgs1", "/kaggle/input/ariel-fgs1/raw/fgs1", "/kaggle/input/fgs1/raw/fgs1"],
+        airs=[env_airs, f"{env_root}/raw/airs_ch0", "/kaggle/input/ariel-airs-ch0/raw/airs_ch0", "/kaggle/input/airs/raw/airs_ch0"],
+        calibration=[env_cal, f"{env_root}/calibration", "/kaggle/input/ariel-calibration/calibration"],
+    )
+    local_candidates = dict(
+        fgs1=[env_fgs1, f"{env_root}/raw/fgs1", "data/challenge/raw/fgs1", "/data/ariel/raw/fgs1", str(Path.home() / "datasets/ariel/raw/fgs1")],
+        airs=[env_airs, f"{env_root}/raw/airs_ch0", "data/challenge/raw/airs_ch0", "/data/ariel/raw/airs_ch0", str(Path.home() / "datasets/ariel/raw/airs_ch0")],
+        calibration=[env_cal, f"{env_root}/calibration", "data/challenge/calibration", "/data/ariel/calibration", str(Path.home() / "datasets/ariel/calibration")],
+    )
+
+    probe = kaggle_candidates if _is_kaggle() else local_candidates
+    paths = cfg.setdefault("paths", {})
+    resolved = dict(
+        fgs1 = paths.get("fgs1") if paths.get("fgs1") and Path(paths["fgs1"]).exists() else _probe_first(probe["fgs1"]),
+        airs = paths.get("airs") if paths.get("airs") and Path(paths["airs"]).exists() else _probe_first(probe["airs"]),
+        calibration = paths.get("calibration") if paths.get("calibration") and Path(paths["calibration"]).exists() else _probe_first(probe["calibration"]),
+        metadata = paths.get("metadata", ""),
+        splits = paths.get("splits", ""),
+        cache = paths.get("cache", "data/cache" if not _is_kaggle() else "/kaggle/working/.cache"),
+    )
+    cfg.setdefault("paths", {}).update({k: v for k, v in resolved.items() if v})
+
+    # Absolutize for robustness
+    for k, v in list(cfg["paths"].items()):
+        if v:
+            cfg["paths"][k] = str(Path(v).resolve())
+
+    _log(True, f"[config] env={effective_env} kaggle={_is_kaggle()} resolved_paths=" + json.dumps(cfg["paths"]))
+    # Defaults for loader/preprocess if not present
+    cfg.setdefault("dataset", {"name": "ariel_challenge", "bins": 283})
+    cfg.setdefault("loader", {"batch_size": 8, "num_workers": 4, "pin_memory": True})
+    cfg.setdefault("preprocess", {"fgs1_len": 512, "airs_width": 356, "bin_to": 283, "normalize": True})
+    return cfg
+
+def resolve_data_config(
+    base_config: str = "configs/data/challenge.yaml",
+    override_config: Optional[str] = None,
+    env: Optional[str] = None,
+) -> Dict[str, Any]:
+    if _external_resolver is not None:
+        return _external_resolver(base_config, override_config, env)
+    return _builtin_resolve_data_config(base_config, override_config, env)
 
 # -------------------------- global options ------------------------------- #
 
@@ -106,9 +195,7 @@ def main(
     log: bool = typer.Option(True, help="Append this run to v50_debug_log.md"),
     version: bool = typer.Option(False, "--version", help="Print version and exit"),
 ):
-    """
-    Global flags are available to all subcommands.
-    """
+    """Global flags are available to all subcommands."""
     if version:
         typer.echo(f"SpectraMind V50 CLI {APP_VERSION}")
         raise typer.Exit(code=0)
@@ -143,6 +230,7 @@ def train(
         _echo_kv("Would use paths", cfg.get("paths", {}))
         return
 
+    _maybe_confirm("start training")
     from src.spectramind.training.train_v50 import train as _train
     _train(epochs=epochs, lr=lr)
     _update_run_hash({"last_command": "train", "epochs": epochs, "lr": lr})
@@ -162,6 +250,7 @@ def predict(
         _echo_kv("Would write", {"submission_csv": out_csv})
         return
 
+    _maybe_confirm(f"run inference → {out_csv}")
     from src.spectramind.inference.predict_v50 import predict as _predict
     _predict(out_csv=out_csv)
     _update_run_hash({"last_command": "predict", "submission_csv": out_csv})
@@ -178,6 +267,7 @@ def calibrate(
         typer.echo("[calibrate] DRY RUN — no calibration executed.")
         return
 
+    _maybe_confirm("apply calibration")
     try:
         from src.spectramind.calibration.calibrate_instance_level import main as _cal
         _cal(pred_json=pred_json, out_json=out_json)
@@ -197,6 +287,7 @@ def diagnose(
         typer.echo("[diagnose] DRY RUN — no report generated.")
         return
 
+    _maybe_confirm("generate diagnostics dashboard")
     from src.spectramind.diagnostics.generate_html_report import generate as _report
     _report(output_html=html)
     _update_run_hash({"last_command": "diagnose", "diagnostics_html": html})
@@ -213,13 +304,8 @@ def submit(
         typer.echo("[submit] DRY RUN — no bundle created.")
         return
 
-    # Try dedicated submit CLI if present; otherwise inline pack
-    try:
-        from src.spectramind.cli.cli_submit import app as _  # noqa: F401
-        # fallback to inline bundle even if imported
-    except Exception:
-        pass
-
+    _maybe_confirm(f"package submission → {out_zip}")
+    # If a dedicated submit CLI exists, we still create a simple bundle here.
     import zipfile
     outp = Path(out_zip)
     outp.parent.mkdir(parents=True, exist_ok=True)
