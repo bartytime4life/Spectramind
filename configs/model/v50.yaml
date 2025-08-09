@@ -1,0 +1,47 @@
+# configs/model/v50.yaml
+# High-level model knobs (code maps these to concrete classes)
+
+arch:
+  fgs1_encoder: "MambaSSM"              # or "ConvGRU", "ResNetLite"
+  airs_encoder: "GNN"                   # edge-feature aware GNN
+  meta_encoder: "MLP"
+  fusion: "concat"                      # [concat|attn|cross_attn]
+  decoder_mu: "MultiScaleHead"          # supports smoothness regularization
+  decoder_sigma: "FlowUncertaintyHead"  # supports attention fusion
+
+dims:
+  fgs1_latent: 256
+  airs_latent: 256
+  meta_latent: 32
+  fusion_latent: 512
+
+dropout:
+  encoder: 0.1
+  fusion: 0.1
+  decoder: 0.0
+
+symbolic:
+  enable_losses: true
+  weights:
+    smoothness: 1.0
+    nonnegativity: 0.1
+    asymmetry: 0.1
+    photonic_alignment: 0.25
+  fft_smoothness_lambda: 0.2
+
+uncertainty:
+  sigma_min: 1.0e-3
+  sigma_max: 0.5
+  calibration: "corel"                  # [none|temperature|corel|both]
+  temperature_init: 1.0
+
+gnn:
+  backend: "GATConv"                    # [GATConv|RGCNConv|NNConv]
+  layers: 3
+  heads: 4
+  edge_features: ["distance", "molecule", "detector_region"]
+  positional_encoding: "fourier"        # [none|sinusoidal|fourier]
+
+training_targets:
+  predict_mu: true
+  predict_sigma: true
