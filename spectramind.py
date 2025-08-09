@@ -2,16 +2,13 @@
 # spectramind.py — Unified CLI for SpectraMind V50
 # ------------------------------------------------
 # Global flags: --dry-run, --confirm, --log, --version
-# Auto Kaggle/local detection + smart data path resolution
-# Logs every run to v50_debug_log.md, updates run_hash_summary_v50.json
-# Commands: resolve-paths / check / train / predict / calibrate / diagnose / submit / selftest
-#
-# If src/spectramind/utils/config.py exists, we import its resolver.
-# Otherwise, we fall back to a built-in lightweight resolver below.
+# Kaggle/local auto-detection via src/spectramind/utils/config.py
+# Logs to v50_debug_log.md, updates run_hash_summary_v50.json
+# Commands: resolve-paths / check / train / predict / calibrate / calibrate-data
+#           explain / diagnose / dashboard / submit / selftest
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import platform
@@ -25,19 +22,16 @@ from typing import Any, Dict, Iterable, Optional, Tuple
 
 import typer
 
+# Hard-require the project resolver (no built-in fallback):
+from src.spectramind.utils.config import resolve_data_config  # type: ignore
+
 # Optional dependency: torch (keep CLI usable without it)
 try:
     import torch  # type: ignore
 except Exception:  # pragma: no cover
     torch = None  # noqa: N816
 
-# Try to import project resolver; fallback if missing
-try:
-    from src.spectramind.utils.config import resolve_data_config as _external_resolver  # type: ignore
-except Exception:
-    _external_resolver = None
-
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.5.0"
 LOG_FILE = Path("v50_debug_log.md")
 RUN_HASH = Path("run_hash_summary_v50.json")
 CONFIG_BASE = "configs/data/challenge.yaml"
@@ -51,9 +45,7 @@ def _now() -> str:
 
 def _git_rev() -> str:
     try:
-        return subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL
-        ).decode().strip()
+        return subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL).decode().strip()
     except Exception:
         return "nogit"
 
@@ -69,6 +61,7 @@ def _update_run_hash(extra: Optional[Dict[str, Any]] = None) -> None:
         "python": platform.python_version(),
         "platform": platform.platform(),
         "git": _git_rev(),
+        "cmdline": " ".join(sys.argv),
     }
     if torch is not None:
         try:
@@ -96,100 +89,6 @@ def _maybe_confirm(what: str) -> None:
 def _is_kaggle() -> bool:
     return bool(os.environ.get("KAGGLE_KERNEL_RUN_TYPE")) or Path("/kaggle/input").exists()
 
-def _probe_first(candidates: Iterable[str]) -> Optional[str]:
-    for p in candidates:
-        if p and Path(p).exists():
-            return str(Path(p).resolve())
-    return None
-
-def _read_yaml(path: Optional[str]) -> Dict[str, Any]:
-    if not path:
-        return {}
-    pp = Path(path)
-    if not pp.exists():
-        return {}
-    try:
-        import yaml  # lazy import
-    except Exception:
-        return {}
-    return (yaml.safe_load(pp.read_text()) or {})
-
-def _merge(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
-    out = dict(a)
-    for k, v in (b or {}).items():
-        if isinstance(v, dict) and isinstance(out.get(k), dict):
-            out[k] = _merge(out[k], v)
-        else:
-            out[k] = v
-    return out
-
-def _builtin_resolve_data_config(
-    base_config: str = CONFIG_BASE,
-    override_config: Optional[str] = None,
-    env: Optional[str] = None,
-) -> Dict[str, Any]:
-    cfg = _read_yaml(base_config)
-
-    effective_env = env or ("kaggle" if _is_kaggle() else "local")
-    auto_yaml = f"configs/data/challenge.{effective_env}.yaml"
-    cfg = _merge(cfg, _read_yaml(auto_yaml))
-    cfg = _merge(cfg, _read_yaml(override_config))
-
-    env_root = os.environ.get("SPECTRAMIND_DATA_ROOT", "")
-    env_fgs1 = os.environ.get("SPECTRAMIND_FGS1", "")
-    env_airs = os.environ.get("SPECTRAMIND_AIRS", "")
-    env_cal  = os.environ.get("SPECTRAMIND_CALIB", "")
-
-    kaggle_candidates = dict(
-        fgs1=[env_fgs1, f"{env_root}/raw/fgs1", "/kaggle/input/ariel-fgs1/raw/fgs1", "/kaggle/input/fgs1/raw/fgs1"],
-        airs=[env_airs, f"{env_root}/raw/airs_ch0", "/kaggle/input/ariel-airs-ch0/raw/airs_ch0", "/kaggle/input/airs/raw/airs_ch0"],
-        calibration=[env_cal, f"{env_root}/calibration", "/kaggle/input/ariel-calibration/calibration"],
-    )
-    local_candidates = dict(
-        fgs1=[env_fgs1, f"{env_root}/raw/fgs1", "data/challenge/raw/fgs1", "/data/ariel/raw/fgs1", str(Path.home() / "datasets/ariel/raw/fgs1")],
-        airs=[env_airs, f"{env_root}/raw/airs_ch0", "data/challenge/raw/airs_ch0", "/data/ariel/raw/airs_ch0", str(Path.home() / "datasets/ariel/raw/airs_ch0")],
-        calibration=[env_cal, f"{env_root}/calibration", "data/challenge/calibration", "/data/ariel/calibration", str(Path.home() / "datasets/ariel/calibration")],
-    )
-
-    probe = kaggle_candidates if _is_kaggle() else local_candidates
-    paths = cfg.setdefault("paths", {})
-    resolved = dict(
-        fgs1 = paths.get("fgs1") if paths.get("fgs1") and Path(paths["fgs1"]).exists() else _probe_first(probe["fgs1"]),
-        airs = paths.get("airs") if paths.get("airs") and Path(paths["airs"]).exists() else _probe_first(probe["airs"]),
-        calibration = paths.get("calibration") if paths.get("calibration") and Path(paths["calibration"]).exists() else _probe_first(probe["calibration"]),
-        metadata = paths.get("metadata", ""),
-        splits = paths.get("splits", ""),
-        cache = paths.get("cache", "data/cache" if not _is_kaggle() else "/kaggle/working/.cache"),
-    )
-    cfg.setdefault("paths", {}).update({k: v for k, v in resolved.items() if v})
-
-    # Absolutize
-    for k, v in list(cfg["paths"].items()):
-        if v:
-            cfg["paths"][k] = str(Path(v).resolve())
-
-    _log(True, f"[config] env={effective_env} kaggle={_is_kaggle()} resolved_paths=" + json.dumps(cfg["paths"]))
-    cfg.setdefault("dataset", {"name": "ariel_challenge", "bins": 283})
-    cfg.setdefault("loader", {"batch_size": 8, "num_workers": 4, "pin_memory": True})
-    cfg.setdefault("preprocess", {"fgs1_len": 512, "airs_width": 356, "bin_to": 283, "normalize": True})
-    return cfg
-
-def resolve_data_config(
-    base_config: str = CONFIG_BASE,
-    override_config: Optional[str] = None,
-    env: Optional[str] = None,
-) -> Dict[str, Any]:
-    if _external_resolver is not None:
-        return _external_resolver(base_config, override_config, env)
-    return _builtin_resolve_data_config(base_config, override_config, env)
-
-def _sha256_file(path: Path) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            h.update(chunk)
-    return h.hexdigest()[:12]
-
 def _snapshot_configs(cfg_paths: Iterable[Path]) -> Optional[Path]:
     ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     out_dir = Path("outputs/config_snapshots") / ts
@@ -208,24 +107,76 @@ class RippleRule:
     touch: Tuple[str, ...]      # if any of these change…
     then_run: Tuple[str, ...]   # …remind to run these
 
-# Minimal, extensible map (aligns with your protocol)
 RIPPLE_MAP: Tuple[RippleRule, ...] = (
+    # Core model/heads
     RippleRule(
-        touch=("src/spectramind/model_v50_ar.py", "src/spectramind/core/multi_scale_decoder.py", "src/spectramind/core/flow_uncertainty_head.py"),
-        then_run=("src/spectramind/training/train_v50.py", "src/spectramind/inference/predict_v50.py", "configs/config_v50.yaml", "spectramind.py"),
+        touch=(
+            "src/spectramind/model_v50_ar.py",
+            "src/spectramind/core/multi_scale_decoder.py",
+            "src/spectramind/core/flow_uncertainty_head.py",
+            "src/spectramind/heads/quantile_head.py",
+        ),
+        then_run=(
+            "src/spectramind/training/train_v50.py",
+            "src/spectramind/inference/predict_v50.py",
+            "src/spectramind/diagnostics/generate_html_report.py",
+            "configs/config_v50.yaml",
+            "spectramind.py",
+        ),
     ),
+    # Encoders / auxiliary models
     RippleRule(
-        touch=("src/spectramind/models/airs_gnn.py", "src/spectramind/models/fgs1_mamba.py"),
-        then_run=("src/spectramind/diagnostics/generate_html_report.py", "src/spectramind/diagnostics/fft_variance_heatmap.py"),
+        touch=(
+            "src/spectramind/models/airs_gnn.py",
+            "src/spectramind/models/fgs1_mamba.py",
+        ),
+        then_run=(
+            "src/spectramind/diagnostics/fft_variance_heatmap.py",
+            "src/spectramind/diagnostics/coherence_curve_plot.py",
+            "src/spectramind/diagnostics/generate_html_report.py",
+        ),
     ),
+    # Symbolic rules & logic
     RippleRule(
-        touch=("src/spectramind/symbolic/symbolic_loss.py", "src/spectramind/symbolic/symbolic_logic_engine.py"),
-        then_run=("src/spectramind/diagnostics/symbolic_violation_overlay.py", "v50_debug_log.md"),
+        touch=(
+            "src/spectramind/symbolic/symbolic_loss.py",
+            "src/spectramind/symbolic/symbolic_logic_engine.py",
+            "src/spectramind/symbolic/symbolic_program_executor.py",
+            "src/spectramind/symbolic/symbolic_program_hypotheses.py",
+            "src/spectramind/symbolic/symbolic_profile_switcher.py",
+        ),
+        then_run=(
+            "src/spectramind/diagnostics/symbolic_influence_map.py",
+            "src/spectramind/diagnostics/violation_heatmap.py",
+            "src/spectramind/diagnostics/generate_html_report.py",
+        ),
+    ),
+    # Diagnostics surfaces
+    RippleRule(
+        touch=(
+            "src/spectramind/diagnostics/spectral_smoothness_map.py",
+            "src/spectramind/diagnostics/fft_variance_heatmap.py",
+            "src/spectramind/diagnostics/plot_quantiles_vs_target.py",
+            "src/spectramind/diagnostics/plot_gll_heatmap_per_bin.py",
+        ),
+        then_run=("src/spectramind/diagnostics/generate_html_report.py",),
+    ),
+    # Data loading & calibration
+    RippleRule(
+        touch=(
+            "src/spectramind/data/dataloader.py",
+            "src/spectramind/calibration/calibrate_instance_level.py",
+            "src/spectramind/calibration/spectral_conformal.py",
+        ),
+        then_run=(
+            "src/spectramind/training/train_v50.py",
+            "src/spectramind/inference/predict_v50.py",
+            "src/spectramind/diagnostics/generate_html_report.py",
+        ),
     ),
 )
 
 def _git_modified(paths: Iterable[str]) -> Iterable[str]:
-    """Return subset of paths that are modified vs HEAD (or simply exist if git not available)."""
     modified = []
     try:
         status = subprocess.check_output(["git", "status", "--porcelain"], stderr=subprocess.DEVNULL).decode()
@@ -234,7 +185,6 @@ def _git_modified(paths: Iterable[str]) -> Iterable[str]:
             if p in changed:
                 modified.append(p)
     except Exception:
-        # fall back: if file exists and mtime < 1 day, consider as 'touched'
         for p in paths:
             fp = Path(p)
             if fp.exists():
@@ -248,9 +198,7 @@ def _ripple_warnings() -> list[str]:
     for rule in RIPPLE_MAP:
         touched = list(_git_modified(rule.touch))
         if touched:
-            notes.append(
-                f"Detected edits in {touched} → consider re-running {list(rule.then_run)}"
-            )
+            notes.append(f"Detected edits in {touched} → consider re-running {list(rule.then_run)}")
     return notes
 
 # ----------------------------- context ----------------------------------- #
@@ -270,13 +218,11 @@ def main(
     log: bool = typer.Option(True, help="Append this run to v50_debug_log.md"),
     version: bool = typer.Option(False, "--version", help="Print version and exit"),
 ):
-    """Global flags are available to all subcommands."""
     if version:
         typer.echo(f"SpectraMind V50 CLI {APP_VERSION}")
         raise typer.Exit(code=0)
     Ctx.dry_run, Ctx.confirm, Ctx.log = dry_run, confirm, log
     _log(Ctx.log, f"[{_now()}] CLI start args dry_run={dry_run} confirm={confirm} log={log} cmd={' '.join(sys.argv)}")
-    # Ripple warnings at entry
     for note in _ripple_warnings():
         _log(True, "[ripple] " + note)
         typer.echo(f"⚠️  {note}")
@@ -287,10 +233,13 @@ def main(
 def resolve_paths(
     data_config: Optional[str] = typer.Option(None, "--data-config", help="Override data YAML"),
     env: Optional[str] = typer.Option(None, "--env", help="Force environment: local|kaggle"),
+    dump: Optional[str] = typer.Option(None, "--dump", help="Write resolved dict to JSON"),
 ):
-    """Print the resolved data/calibration/cache paths after auto-detection."""
     cfg = resolve_data_config(CONFIG_BASE, data_config, env)
     _echo_kv("Resolved paths", cfg.get("paths", {}))
+    if dump:
+        Path(dump).write_text(json.dumps(cfg, indent=2))
+        typer.echo(f"Wrote resolved config -> {dump}")
     _log(Ctx.log, f"[resolve_paths] {json.dumps(cfg.get('paths', {}))}")
 
 @app.command()
@@ -298,11 +247,8 @@ def check(
     data_config: Optional[str] = typer.Option(None, "--data-config"),
     env: Optional[str] = typer.Option(None, "--env"),
 ):
-    """Run repo self-checks (selftest + optional pipeline_consistency_checker)."""
-    cfg = resolve_data_config(CONFIG_BASE, data_config, env)  # ensures resolver runs/logs
+    _ = resolve_data_config(CONFIG_BASE, data_config, env)
     rc_total = 0
-
-    # selftest
     try:
         from src.spectramind.cli.selftest import main as _self
         rc = _self()
@@ -311,8 +257,6 @@ def check(
     except Exception as e:
         typer.echo(f"selftest: ❌ error: {e}")
         rc_total |= 1
-
-    # optional pipeline_consistency_checker
     try:
         mod = "src/spectramind/cli/pipeline_consistency_checker.py"
         if Path(mod).exists():
@@ -326,7 +270,6 @@ def check(
     except Exception as e:
         typer.echo(f"consistency: ❌ error: {e}")
         rc_total |= 1
-
     _update_run_hash({"last_command": "check"})
     if rc_total:
         raise typer.Exit(code=1)
@@ -335,29 +278,20 @@ def check(
 def train(
     epochs: int = typer.Option(2, help="Epochs"),
     lr: float = typer.Option(3e-4, help="Learning rate"),
-    data_config: Optional[str] = typer.Option(None, "--data-config", help="Override data YAML"),
-    env: Optional[str] = typer.Option(None, "--env", help="Force environment: local|kaggle"),
+    data_config: Optional[str] = typer.Option(None, "--data-config"),
+    env: Optional[str] = typer.Option(None, "--env"),
 ):
-    """Supervised training (GLL + symbolic)."""
     cfg = resolve_data_config(CONFIG_BASE, data_config, env)
     _log(Ctx.log, f"[train] cfg_paths={json.dumps(cfg.get('paths', {}))} epochs={epochs} lr={lr}")
-
     if Ctx.dry_run:
         typer.echo("[train] DRY RUN — no training executed.")
         _echo_kv("Would use paths", cfg.get("paths", {}))
         return
-
     _maybe_confirm("start training")
-    # Snapshot configs used this run (best-effort)
-    snap = _snapshot_configs([
-        Path(CONFIG_BASE),
-        Path(f"configs/data/challenge.{ 'kaggle' if _is_kaggle() else 'local' }.yaml")
-    ])
-    if snap:
-        _log(True, f"[snapshot] configs saved -> {snap}")
-
+    snap = _snapshot_configs([Path(CONFIG_BASE), Path(f"configs/data/challenge.{ 'kaggle' if _is_kaggle() else 'local' }.yaml")])
+    if snap: _log(True, f"[snapshot] configs -> {snap}")
     from src.spectramind.training.train_v50 import train as _train
-    _train(epochs=epochs, lr=lr)
+    _train(epochs=epochs, lr=lr, cfg=cfg)
     _update_run_hash({"last_command": "train", "epochs": epochs, "lr": lr})
 
 @app.command()
@@ -366,23 +300,17 @@ def predict(
     data_config: Optional[str] = typer.Option(None, "--data-config"),
     env: Optional[str] = typer.Option(None, "--env"),
 ):
-    """Inference pipeline to generate μ and σ; writes submission.csv."""
     cfg = resolve_data_config(CONFIG_BASE, data_config, env)
     _log(Ctx.log, f"[predict] cfg_paths={json.dumps(cfg.get('paths', {}))} out={out_csv}")
-
     if Ctx.dry_run:
         typer.echo("[predict] DRY RUN — no inference executed.")
         _echo_kv("Would write", {"submission_csv": out_csv})
         return
-
     _maybe_confirm(f"run inference → {out_csv}")
-    # Snapshot configs
     snap = _snapshot_configs([Path(CONFIG_BASE)])
-    if snap:
-        _log(True, f"[snapshot] configs saved -> {snap}")
-
+    if snap: _log(True, f"[snapshot] configs -> {snap}")
     from src.spectramind.inference.predict_v50 import predict as _predict
-    _predict(out_csv=out_csv)
+    _predict(out_csv=out_csv, cfg=cfg)
     _update_run_hash({"last_command": "predict", "submission_csv": out_csv})
 
 @app.command()
@@ -390,61 +318,100 @@ def calibrate(
     pred_json: str = typer.Option("outputs/predictions.json", help="Input predictions JSON"),
     out_json: str = typer.Option("outputs/predictions_calibrated.json", help="Calibrated output JSON"),
 ):
-    """Instance-level & conformal calibration."""
     _log(Ctx.log, f"[calibrate] in={pred_json} out={out_json}")
-
     if Ctx.dry_run:
-        typer.echo("[calibrate] DRY RUN — no calibration executed.")
-        return
-
+        typer.echo("[calibrate] DRY RUN — no calibration executed."); return
     _maybe_confirm("apply calibration")
+    from src.spectramind.calibration.calibrate_instance_level import main as _cal
+    _cal(pred_json=pred_json, out_json=out_json)
+    _update_run_hash({"last_command": "calibrate", "pred_in": pred_json, "pred_out": out_json})
+
+@app.command("calibrate-data")
+def calibrate_data(
+    data_config: Optional[str] = typer.Option(None, "--data-config"),
+    env: Optional[str] = typer.Option(None, "--env"),
+):
+    """Run raw data calibration/preprocessing (if module available)."""
+    cfg = resolve_data_config(CONFIG_BASE, data_config, env)
+    _log(Ctx.log, "[calibrate-data] start")
+    if Ctx.dry_run:
+        typer.echo("[calibrate-data] DRY RUN — no action."); return
     try:
-        from src.spectramind.calibration.calibrate_instance_level import main as _cal
-        _cal(pred_json=pred_json, out_json=out_json)
-        _update_run_hash({"last_command": "calibrate", "pred_in": pred_json, "pred_out": out_json})
-    except Exception as e:  # pragma: no cover
-        typer.echo(f"Calibration module not available or failed: {e}")
-        raise typer.Exit(code=1)
+        from src.spectramind.data.calibrate_raw_data import main as _cd  # optional module
+        _cd(cfg=cfg)
+    except Exception as e:
+        typer.echo(f"[calibrate-data] Skipped (module missing or error): {e}")
+    _update_run_hash({"last_command": "calibrate-data"})
+
+@app.command()
+def explain(
+    html: str = typer.Option("outputs/diagnostics/explain_report.html", help="Output HTML"),
+):
+    """Generate SHAP + symbolic overlays (optional; runs if modules exist)."""
+    _log(Ctx.log, f"[explain] html={html}")
+    if Ctx.dry_run:
+        typer.echo("[explain] DRY RUN — no report."); return
+    try:
+        from src.spectramind.diagnostics.shap_overlay import generate as _shap
+        from src.spectramind.diagnostics.symbolic_influence_map import generate as _sym
+        _shap(output_html=html.replace(".html", "_shap.html"))
+        _sym(output_html=html.replace(".html", "_symbolic.html"))
+        typer.echo(f"Wrote overlays near {html}")
+    except Exception as e:
+        typer.echo(f"[explain] Skipped (modules missing or error): {e}")
+    _update_run_hash({"last_command": "explain", "html": html})
 
 @app.command()
 def diagnose(
     html: str = typer.Option("outputs/diagnostics/diagnostic_report_v50.html", help="Output HTML"),
 ):
-    """Generate a unified diagnostics HTML dashboard."""
     _log(Ctx.log, f"[diagnose] html={html}")
-
     if Ctx.dry_run:
-        typer.echo("[diagnose] DRY RUN — no report generated.")
-        return
-
+        typer.echo("[diagnose] DRY RUN — no report generated."); return
     _maybe_confirm("generate diagnostics dashboard")
     from src.spectramind.diagnostics.generate_html_report import generate as _report
     _report(output_html=html)
     _update_run_hash({"last_command": "diagnose", "diagnostics_html": html})
 
 @app.command()
+def dashboard(
+    host: str = typer.Option("127.0.0.1", help="Bind host"),
+    port: int = typer.Option(7860, help="Port"),
+):
+    """Start optional FastAPI/Gradio dashboard if bundled."""
+    _log(Ctx.log, f"[dashboard] {host}:{port}")
+    if Ctx.dry_run:
+        typer.echo("[dashboard] DRY RUN — not starting server."); return
+    try:
+        from src.spectramind.dashboard.app import run as _run  # optional module
+        _run(host=host, port=port)
+    except Exception as e:
+        typer.echo(f"[dashboard] Skipped (module missing or error): {e}")
+        raise typer.Exit(code=1)
+
+@app.command()
 def submit(
     submission: str = typer.Option("outputs/submission.csv", help="Input submission CSV"),
     out_zip: str = typer.Option("outputs/submission_bundle.zip", help="Packaged bundle"),
 ):
-    """Validate and package submission + reproducibility artifacts."""
     _log(Ctx.log, f"[submit] csv={submission} bundle={out_zip}")
-
     if Ctx.dry_run:
-        typer.echo("[submit] DRY RUN — no bundle created.")
-        return
-
+        typer.echo("[submit] DRY RUN — no bundle created."); return
     _maybe_confirm(f"package submission → {out_zip}")
-    # Bundle minimal reproducibility artifacts
     import zipfile
-    outp = Path(out_zip)
-    outp.parent.mkdir(parents=True, exist_ok=True)
+    outp = Path(out_zip); outp.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(outp, "w") as z:
         z.write(submission, arcname="submission.csv")
-        for extra in ["run_hash_summary_v50.json", "v50_debug_log.md"]:
-            if Path(extra).exists():
-                z.write(extra, arcname=Path(extra).name)
-        # include latest config snapshot if present
+        for extra in [
+            "run_hash_summary_v50.json",
+            "v50_debug_log.md",
+            "configs/data/challenge.yaml",
+            "configs/data/challenge.local.yaml",
+            "configs/data/challenge.kaggle.yaml",
+        ]:
+            p = Path(extra)
+            if p.exists():
+                z.write(p, arcname=str(p))
         snaps = sorted(Path("outputs/config_snapshots").glob("*"), reverse=True)
         if snaps:
             for p in snaps[0].glob("*"):
@@ -454,7 +421,6 @@ def submit(
 
 @app.command()
 def selftest():
-    """Lightweight repository sanity check."""
     _log(Ctx.log, "[selftest]")
     try:
         from src.spectramind.cli.selftest import main as _self
