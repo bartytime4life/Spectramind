@@ -193,9 +193,3 @@ MIT License — see LICENSE for details.
 	•	Kaggle: AndyBarta
 
 ⸻
-
-
----
-
-If you want, I can also make you a **matching `docs/` folder** with a `pipeline_overview.md` and `cli_guide.md` so the README stays light but people can dive into deep details when needed.  
-Do you want me to build that next?
