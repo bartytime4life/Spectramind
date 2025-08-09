@@ -3,7 +3,7 @@
 [![SpectraMind V50 CI — main](https://github.com/bartytime4life/SpectraMind/actions/workflows/spectramind-ci.yml/badge.svg?branch=main)](https://github.com/bartytime4life/SpectraMind/actions/workflows/spectramind-ci.yml?query=branch%3Amain)
 [![Kaggle Competition](https://img.shields.io/badge/Kaggle-NeurIPS%202025%20Ariel%20Challenge-blue?logo=kaggle)](https://www.kaggle.com/competitions/neurips-2025-ariel-data-challenge)
 
-**Challenge-winning AI pipeline for exoplanet atmosphere characterization**  
+**AI pipeline for exoplanet atmosphere characterization**  
 SpectraMind V50 integrates cutting-edge deep learning, symbolic reasoning, and scientific diagnostics to tackle the [NeurIPS 2025 Ariel Data Challenge](https://www.kaggle.com/competitions/neurips-2025-ariel-data-challenge).  
 From photometric calibration to symbolic constraint validation, V50 is engineered for maximum accuracy, explainability, and reproducibility.
 
