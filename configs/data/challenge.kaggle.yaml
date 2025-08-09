@@ -1,0 +1,26 @@
+dataset:
+  name: ariel_challenge
+  bins: 283
+
+paths:
+  # Replace folder names with the actual datasets you attach to the notebook.
+  fgs1: /kaggle/input/ariel-fgs1/raw/fgs1
+  airs: /kaggle/input/ariel-airs-ch0/raw/airs_ch0
+  calibration: /kaggle/input/ariel-calibration/calibration
+  metadata: /kaggle/input/ariel-metadata/metadata
+  splits: /kaggle/input/ariel-splits/splits.json
+  cache: /kaggle/working/.cache
+
+loader:
+  batch_size: 8
+  num_workers: 2        # conservative for Kaggle memory limits
+  pin_memory: true
+  persistent_workers: false
+  prefetch_factor: 2
+
+preprocess:
+  fgs1_len: 512
+  airs_width: 356
+  bin_to: 283
+  normalize: true
+  detrend: median
