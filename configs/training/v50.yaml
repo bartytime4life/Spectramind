@@ -1,0 +1,38 @@
+# configs/training/v50.yaml
+# Training hyperparameters and schedules
+
+optimizer:
+  name: "adamw"
+  lr: 3.0e-4
+  weight_decay: 0.01
+  betas: [0.9, 0.999]
+
+scheduler:
+  name: "cosine"
+  warmup_epochs: 5
+  max_epochs: 60
+  min_lr: 1.0e-6
+
+mixed_precision:
+  enabled: true
+  grad_scaler: true
+
+batching:
+  accumulate_steps: 1
+  clip_grad_norm: 1.0
+
+loss:
+  gll_weight: 1.0
+  symbolic_weight: 1.0
+  calibration_weight: 0.0
+
+curriculum:
+  mae_pretrain_epochs: 0      # set >0 to enable MAE phase before supervised
+  contrastive_epochs: 0
+  supervised_epochs: ${scheduler.max_epochs}
+
+logging:
+  log_interval_steps: 50
+  val_interval_epochs: 1
+  checkpoint_interval_epochs: 1
+  keep_last_n_checkpoints: 5
