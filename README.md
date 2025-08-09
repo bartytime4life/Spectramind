@@ -1,9 +1,3 @@
-Got it — here’s a complete README.md skeleton for SpectraMind V50 with everything polished and structured.
-It includes your badges, Quick Start, project overview, architecture diagram placeholder, CLI guide, and contribution section.
-
-⸻
-
-
 # 🌌 SpectraMind V50 — NeurIPS 2025 Ariel Data Challenge
 
 [![SpectraMind V50 CI — main](https://github.com/bartytime4life/SpectraMind/actions/workflows/spectramind-ci.yml/badge.svg?branch=main)](https://github.com/bartytime4life/SpectraMind/actions/workflows/spectramind-ci.yml?query=branch%3Amain)
