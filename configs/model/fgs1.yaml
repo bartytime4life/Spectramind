@@ -1,0 +1,6 @@
+name: fgs1_mamba
+d_model: 256
+depth: 6
+nhead: 4
+pool: cls
+droppath: 0.05
