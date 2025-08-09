@@ -1,14 +1,23 @@
-torch>=2.1
-torchvision
-torchaudio
-numpy
-pandas
-scipy
-matplotlib
-plotly
-typer[all]
-rich
-pyyaml
-hydra-core
-scikit-learn
-torch-geometric
+# Core PyTorch stack
+torch==2.1.2
+torchvision==0.16.2
+torchaudio==2.1.2
+
+# Scientific stack
+numpy==1.26.4
+pandas==2.2.2
+scipy==1.13.1
+scikit-learn==1.5.1
+
+# Visualization
+matplotlib==3.9.2
+plotly==5.24.1
+rich==13.7.1
+
+# CLI / Config
+typer[all]==0.12.3
+pyyaml==6.0.2
+hydra-core==1.3.2
+
+# Graph neural networks
+torch-geometric==2.5.3
