@@ -1,0 +1,3 @@
+mae_pretrain: true
+contrastive: true
+supervised: true
